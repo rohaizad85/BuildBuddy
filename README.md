@@ -1,1 +1,1 @@
-BuildBuddy: AI assisted computer shop
+BuildBuddy: AI assisted computer shopgi

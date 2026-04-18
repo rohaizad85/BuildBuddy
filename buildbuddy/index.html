@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuildBuddy - Computer Shop</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-link active">Shop</a>
+                <a href="#" class="nav-link">PC Builder</a>
+                <a href="#" class="nav-link">Services</a>
+                <a href="#" class="nav-link">My Bookings</a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn">
+                    <i class="fas fa-user"></i>
+                    Login
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h2>Build Your Dream PC</h2>
+                <p>AI-powered compatibility checker helps you pick the right parts</p>
+                <button class="btn-primary" id="startBuilderBtn">
+                    <i class="fas fa-robot"></i>
+                    Start PC Builder
+                </button>
+            </div>
+        </section>
+
+        <div class="container">
+            <div class="main-layout">
+                <aside class="sidebar">
+                    <h3>Categories</h3>
+                    <ul class="category-list">
+                        <li class="category-item active" data-category="all">All Products</li>
+                        <li class="category-item" data-category="cpu">CPU</li>
+                        <li class="category-item" data-category="motherboard">Motherboard</li>
+                        <li class="category-item" data-category="ram">RAM</li>
+                        <li class="category-item" data-category="gpu">GPU</li>
+                    </ul>
+                </aside>
+
+                <section class="products-section">
+                    <div class="section-header">
+                        <h2>Computer Components</h2>
+                        <div class="ai-toggle">
+                            <label class="switch">
+                                <input type="checkbox" id="compatibilityMode" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span><i class="fas fa-brain"></i> AI Compatibility Mode</span>
+                        </div>
+                    </div>
+
+                    <div class="selected-parts-bar" id="selectedPartsBar">
+                        <span>Selected: </span>
+                        <span id="selectedPartsDisplay">No parts selected</span>
+                    </div>
+
+                    <div class="products-grid" id="productsGrid">
+                        <!-- Products will be loaded here via JavaScript -->
+                    </div>
+                </section>
+            </div>
+
+            <section class="services-section">
+                <h2>Technical Services</h2>
+                <div class="services-grid" id="servicesGrid">
+                    <!-- Services will be loaded here -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div class="modal" id="compatibilityModal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="modal-header">
+                <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
+                <h3>Compatibility Check</h3>
+            </div>
+            <div class="modal-body" id="modalMessage">
+                <!-- Compatibility message will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
