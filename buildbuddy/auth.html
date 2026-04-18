@@ -111,17 +111,18 @@
             position: relative;
         }
         
-        .form-group i {
+        .form-group i:first-child {
             position: absolute;
             left: 15px;
             top: 50%;
             transform: translateY(-50%);
             color: #999;
+            z-index: 1;
         }
         
         .form-group input {
             width: 100%;
-            padding: 14px 15px 14px 45px;
+            padding: 14px 45px 14px 45px;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
@@ -136,11 +137,30 @@
         
         .password-toggle {
             position: absolute;
-            right: 15px;
+            right: 12px;
             top: 50%;
             transform: translateY(-50%);
             cursor: pointer;
             color: #999;
+            z-index: 2;
+            background: transparent;
+            border: none;
+            padding: 8px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s;
+            border-radius: 4px;
+        }
+        
+        .password-toggle:hover {
+            color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+        
+        .password-toggle:focus {
+            outline: none;
         }
         
         .form-check {
@@ -343,13 +363,13 @@
                 <a href="index.html#services" class="nav-link">Services</a>
             </nav>
             <div class="header-actions">
-                <button class="cart-btn">
+                <button class="cart-btn" onclick="window.location.href='cart.html'">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count">0</span>
                 </button>
-                <button class="login-btn" onclick="window.location.href='auth.html'">
+                <button class="login-btn" id="loginBtn">
                     <i class="fas fa-user"></i>
-                    Login
+                    <span id="loginBtnText">Login</span>
                 </button>
             </div>
         </div>
@@ -383,7 +403,9 @@
                         <div class="form-group">
                             <i class="fas fa-lock"></i>
                             <input type="password" id="loginPassword" placeholder="Password" required>
-                            <i class="fas fa-eye password-toggle" onclick="togglePassword('loginPassword', this)"></i>
+                            <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)" tabindex="-1">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                         
                         <div style="overflow: hidden; margin-bottom: 20px;">
@@ -394,7 +416,7 @@
                             <a href="#" class="forgot-link">Forgot Password?</a>
                         </div>
                         
-                        <button type="submit" class="auth-btn" id="loginBtn">
+                        <button type="submit" class="auth-btn" id="loginBtnSubmit">
                             <i class="fas fa-sign-in-alt"></i> Sign In
                         </button>
                     </form>
@@ -439,13 +461,17 @@
                         <div class="form-group">
                             <i class="fas fa-lock"></i>
                             <input type="password" id="registerPassword" placeholder="Password" required>
-                            <i class="fas fa-eye password-toggle" onclick="togglePassword('registerPassword', this)"></i>
+                            <button type="button" class="password-toggle" onclick="togglePassword('registerPassword', this)" tabindex="-1">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                         
                         <div class="form-group">
                             <i class="fas fa-lock"></i>
                             <input type="password" id="registerConfirmPassword" placeholder="Confirm Password" required>
-                            <i class="fas fa-eye password-toggle" onclick="togglePassword('registerConfirmPassword', this)"></i>
+                            <button type="button" class="password-toggle" onclick="togglePassword('registerConfirmPassword', this)" tabindex="-1">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                         
                         <div class="form-check">

@@ -49,8 +49,10 @@ window.switchTab = function(tabName) {
 };
 
 // Toggle password visibility
-window.togglePassword = function(inputId, icon) {
+window.togglePassword = function(inputId, button) {
     const input = document.getElementById(inputId);
+    const icon = button.querySelector('i');
+    
     if (input.type === 'password') {
         input.type = 'text';
         icon.classList.remove('fa-eye');
@@ -108,7 +110,7 @@ window.handleLogin = async function(event) {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const rememberMe = document.getElementById('rememberMe').checked;
-    const btn = document.getElementById('loginBtn');
+    const btn = document.getElementById('loginBtnSubmit');
     
     btn.disabled = true;
     btn.innerHTML = '<span class="loading-spinner-small"></span> Signing in...';
@@ -159,7 +161,6 @@ window.handleLogin = async function(event) {
     }
 };
 
-// Handle Register
 // Handle Register with debug logging
 window.handleRegister = async function(event) {
     event.preventDefault();
@@ -325,11 +326,17 @@ window.socialLogin = function(provider) {
 // Check if user is logged in
 function checkAuth() {
     const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-    if (user) {
+    const loginBtn = document.querySelector('.login-btn');
+    const loginBtnText = document.getElementById('loginBtnText');
+    
+    if (user && loginBtn && loginBtnText) {
         const userData = JSON.parse(user);
-        const loginBtnText = document.getElementById('loginBtnText');
+        loginBtnText.textContent = userData.name.split(' ')[0];
+        loginBtn.onclick = () => window.location.href = 'profile.html';
+    } else if (loginBtn) {
+        loginBtn.onclick = () => window.location.href = 'auth.html';
         if (loginBtnText) {
-            loginBtnText.textContent = userData.name.split(' ')[0];
+            loginBtnText.textContent = 'Login';
         }
     }
 }
