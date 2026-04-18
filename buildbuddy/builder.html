@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Builder - BuildBuddy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="builder.html" class="nav-link active">PC Builder</a>
+                <a href="#" class="nav-link">Pre-Built PCs</a>
+                <a href="#" class="nav-link">Services</a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn">
+                    <i class="fas fa-user"></i>
+                    Login
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="builder-header">
+            <div class="container">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+                <h2><i class="fas fa-cogs"></i> Custom PC Builder</h2>
+                <p>Select components - Our AI will check compatibility in real-time</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="main-layout">
+                <aside class="sidebar">
+                    <h3>Categories</h3>
+                    <ul class="category-list">
+                        <li class="category-item active" data-category="all">All Products</li>
+                        <li class="category-item" data-category="cpu">CPU</li>
+                        <li class="category-item" data-category="motherboard">Motherboard</li>
+                        <li class="category-item" data-category="ram">RAM</li>
+                        <li class="category-item" data-category="gpu">GPU</li>
+                    </ul>
+
+                    <div class="build-summary">
+                        <h3>Your Build</h3>
+                        <div id="buildSummaryList">
+                            <p class="empty-build">No components selected</p>
+                        </div>
+                        <div class="build-total">
+                            <span>Total:</span>
+                            <span id="buildTotal">RM 0</span>
+                        </div>
+                        <button class="btn-primary btn-full" id="completeBuildBtn">
+                            <i class="fas fa-check"></i> Complete Build
+                        </button>
+                    </div>
+                </aside>
+
+                <section class="products-section">
+                    <div class="section-header">
+                        <h2>Select Components</h2>
+                        <div class="ai-toggle">
+                            <label class="switch">
+                                <input type="checkbox" id="compatibilityMode" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span><i class="fas fa-brain"></i> AI Compatibility</span>
+                        </div>
+                    </div>
+
+                    <div class="selected-parts-bar" id="selectedPartsBar">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="selectedPartsDisplay">Start by selecting a CPU or Motherboard</span>
+                    </div>
+
+                    <div class="products-grid" id="productsGrid">
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="compatibilityModal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="modal-header">
+                <i class="fas fa-robot"></i>
+                <h3>AI Compatibility Check</h3>
+            </div>
+            <div class="modal-body" id="modalMessage">
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
