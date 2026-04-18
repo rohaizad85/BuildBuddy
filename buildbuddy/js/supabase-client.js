@@ -28,6 +28,8 @@ class SupabaseQueryBuilder {
         this.operation = 'select';
         this.updateData = null;
         this.insertData = null;
+        this.singleResult = false;
+        this.maybeSingleResult = false;
     }
 
     select(columns = '*') {
@@ -79,6 +81,16 @@ class SupabaseQueryBuilder {
 
     limit(count) {
         this.limitCount = count;
+        return this;
+    }
+
+    single() {
+        this.singleResult = true;
+        return this;
+    }
+
+    maybeSingle() {
+        this.maybeSingleResult = true;
         return this;
     }
 
@@ -142,7 +154,25 @@ class SupabaseQueryBuilder {
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        return await response.json();
+        const data = await response.json();
+        
+        // Handle single() - return first item or null
+        if (this.singleResult) {
+            if (Array.isArray(data) && data.length > 0) {
+                return data[0];
+            }
+            return null;
+        }
+        
+        // Handle maybeSingle() - return first item or null without error if multiple
+        if (this.maybeSingleResult) {
+            if (Array.isArray(data) && data.length > 0) {
+                return data[0];
+            }
+            return null;
+        }
+        
+        return data;
     }
 
     async executeInsert() {
@@ -162,7 +192,13 @@ class SupabaseQueryBuilder {
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        return await response.json();
+        const data = await response.json();
+        
+        if (this.singleResult) {
+            return Array.isArray(data) ? data[0] : data;
+        }
+        
+        return data;
     }
 
     async executeUpdate() {
@@ -186,7 +222,13 @@ class SupabaseQueryBuilder {
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        return await response.json();
+        const data = await response.json();
+        
+        if (this.singleResult) {
+            return Array.isArray(data) ? data[0] : data;
+        }
+        
+        return data;
     }
 
     async executeDelete() {

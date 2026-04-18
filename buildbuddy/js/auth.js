@@ -73,17 +73,21 @@ function clearMessages() {
 // Show error
 function showError(formType, message) {
     const errorEl = document.getElementById(`${formType}Error`);
-    errorEl.textContent = message;
-    errorEl.style.display = 'block';
-    setTimeout(() => errorEl.style.display = 'none', 5000);
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        setTimeout(() => errorEl.style.display = 'none', 5000);
+    }
 }
 
 // Show success
 function showSuccess(formType, message) {
     const successEl = document.getElementById(`${formType}Success`);
-    successEl.textContent = message;
-    successEl.style.display = 'block';
-    setTimeout(() => successEl.style.display = 'none', 3000);
+    if (successEl) {
+        successEl.textContent = message;
+        successEl.style.display = 'block';
+        setTimeout(() => successEl.style.display = 'none', 3000);
+    }
 }
 
 // Simple hash function (for demo purposes)
@@ -112,14 +116,14 @@ window.handleLogin = async function(event) {
     try {
         const passwordHash = await hashPassword(password);
         
-        const { data, error } = await supabase
+        const user = await supabase
             .from('users')
             .select('*')
             .eq('email', email)
             .eq('password_hash', passwordHash)
             .single();
         
-        if (error || !data) {
+        if (!user) {
             throw new Error('Invalid email or password');
         }
         
@@ -127,13 +131,13 @@ window.handleLogin = async function(event) {
         await supabase
             .from('users')
             .update({ last_login: new Date().toISOString() })
-            .eq('user_id', data.user_id);
+            .eq('user_id', user.user_id);
         
         // Store user info
         const userData = {
-            id: data.user_id,
-            name: data.full_name,
-            email: data.email
+            id: user.user_id,
+            name: user.full_name,
+            email: user.email
         };
         
         if (rememberMe) {
@@ -156,6 +160,7 @@ window.handleLogin = async function(event) {
 };
 
 // Handle Register
+// Handle Register with debug logging
 window.handleRegister = async function(event) {
     event.preventDefault();
     clearMessages();
@@ -168,18 +173,29 @@ window.handleRegister = async function(event) {
     const agreeTerms = document.getElementById('agreeTerms').checked;
     const btn = document.getElementById('registerBtn');
     
+    console.log('=== REGISTRATION DEBUG ===');
+    console.log('Name:', name);
+    console.log('Email:', email);
+    console.log('Phone:', phone || '(empty)');
+    console.log('Password length:', password.length);
+    console.log('Passwords match:', password === confirmPassword);
+    console.log('Terms agreed:', agreeTerms);
+    
     // Validation
     if (password !== confirmPassword) {
+        console.log('❌ Password validation failed: passwords do not match');
         showError('register', 'Passwords do not match');
         return;
     }
     
     if (password.length < 6) {
+        console.log('❌ Password validation failed: too short');
         showError('register', 'Password must be at least 6 characters');
         return;
     }
     
     if (!agreeTerms) {
+        console.log('❌ Terms not agreed');
         showError('register', 'Please agree to the Terms & Conditions');
         return;
     }
@@ -188,31 +204,66 @@ window.handleRegister = async function(event) {
     btn.innerHTML = '<span class="loading-spinner-small"></span> Creating account...';
     
     try {
-        // Check if email exists
-        const { data: existingUser } = await supabase
+        // Step 1: Check if email exists
+        console.log('📧 Checking if email exists...');
+        
+        const existingUser = await supabase
             .from('users')
             .select('email')
             .eq('email', email)
             .single();
         
+        console.log('Existing user check result:', existingUser);
+        
         if (existingUser) {
+            console.log('❌ Email already registered');
             throw new Error('Email already registered');
         }
         
-        const passwordHash = await hashPassword(password);
+        console.log('✅ Email is available');
         
-        const { data, error } = await supabase
+        // Step 2: Hash password
+        console.log('🔐 Hashing password...');
+        const passwordHash = await hashPassword(password);
+        console.log('Password hash created (first 10 chars):', passwordHash.substring(0, 10) + '...');
+        
+        // Step 3: Insert user
+        console.log('💾 Inserting user into database...');
+        
+        const userData = {
+            full_name: name,
+            email: email,
+            phone: phone || null,
+            password_hash: passwordHash
+        };
+        
+        console.log('User data to insert:', {
+            ...userData,
+            password_hash: '[HIDDEN]'
+        });
+        
+        // Try insert without select first
+        const insertResult = await supabase
             .from('users')
-            .insert({
-                full_name: name,
-                email: email,
-                phone: phone || null,
-                password_hash: passwordHash
-            })
-            .select()
+            .insert([userData]);
+        
+        console.log('Raw insert result:', insertResult);
+        
+        // Now try to fetch the inserted user
+        const newUser = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
             .single();
         
-        if (error) throw error;
+        console.log('Fetched new user:', newUser);
+        
+        if (!newUser) {
+            console.log('❌ No user returned after insert');
+            throw new Error('Failed to create account - no data returned');
+        }
+        
+        console.log('✅ User created successfully! User ID:', newUser.user_id);
         
         showSuccess('register', 'Account created successfully! You can now login.');
         
@@ -234,7 +285,33 @@ window.handleRegister = async function(event) {
         }, 2000);
         
     } catch (error) {
-        showError('register', error.message);
+        console.log('❌ REGISTRATION ERROR ❌');
+        console.log('Error object:', error);
+        console.log('Error message:', error.message);
+        console.log('Error details:', error.details);
+        console.log('Error hint:', error.hint);
+        console.log('Error code:', error.code);
+        
+        let errorMessage = error.message;
+        
+        // Check for specific error types
+        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+            errorMessage = 'Email already registered';
+        } else if (error.message.includes('violates row-level security')) {
+            errorMessage = 'Permission denied. Please run the RLS fix SQL.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+            errorMessage = 'Network error. Please check your connection.';
+        } else if (error.message.includes('400')) {
+            errorMessage = 'Bad request. Check if all required fields are provided.';
+        } else if (error.message.includes('401') || error.message.includes('403')) {
+            errorMessage = 'Authentication error. Check RLS policies.';
+        } else if (error.message.includes('500')) {
+            errorMessage = 'Server error. Check Supabase logs.';
+        }
+        
+        console.log('Final error message:', errorMessage);
+        
+        showError('register', errorMessage);
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
     }
@@ -250,10 +327,9 @@ function checkAuth() {
     const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
     if (user) {
         const userData = JSON.parse(user);
-        const loginBtn = document.querySelector('.login-btn');
-        if (loginBtn) {
-            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
-            loginBtn.onclick = () => window.location.href = 'profile.html';
+        const loginBtnText = document.getElementById('loginBtnText');
+        if (loginBtnText) {
+            loginBtnText.textContent = userData.name.split(' ')[0];
         }
     }
 }
@@ -274,10 +350,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCartCount();
     
     // Set up switch link
-    document.getElementById('switchToRegister').onclick = (e) => {
-        e.preventDefault();
-        switchTab('register');
-    };
+    const switchLink = document.getElementById('switchToRegister');
+    if (switchLink) {
+        switchLink.onclick = (e) => {
+            e.preventDefault();
+            switchTab('register');
+        };
+    }
 });
 
 // Export for use in other files

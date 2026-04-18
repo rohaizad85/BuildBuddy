@@ -25,9 +25,9 @@
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count">0</span>
                 </button>
-                <button class="login-btn" onclick="window.location.href='auth.html'">
-                    <i class="fas fa-user"></i>
-                    <span id="loginBtnText">Login</span>
+                <button class="login-btn" id="loginBtn">
+                <i class="fas fa-user"></i>
+                <span id="loginBtnText">Login</span>
                 </button>
             </div>
         </div>
@@ -267,15 +267,24 @@
         }
         
         // Check login status
-        function checkLoginStatus() {
-            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-            const loginBtnText = document.getElementById('loginBtnText');
-            
-            if (user && loginBtnText) {
-                const userData = JSON.parse(user);
-                loginBtnText.textContent = userData.name.split(' ')[0];
-            }
+function checkLoginStatus() {
+    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+    const loginBtn = document.querySelector('.login-btn');
+    const loginBtnText = document.getElementById('loginBtnText');
+    
+    if (user && loginBtn && loginBtnText) {
+        const userData = JSON.parse(user);
+        loginBtnText.textContent = userData.name.split(' ')[0];
+        // Update onclick to go to profile instead of auth
+        loginBtn.onclick = () => window.location.href = 'profile.html';
+    } else if (loginBtn) {
+        // Ensure logged out users go to auth page
+        loginBtn.onclick = () => window.location.href = 'auth.html';
+        if (loginBtnText) {
+            loginBtnText.textContent = 'Login';
         }
+    }
+}
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {

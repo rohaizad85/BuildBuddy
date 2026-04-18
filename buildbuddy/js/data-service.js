@@ -296,6 +296,34 @@ class DataService {
         }
     }
 
+    async updateCartItemQuantity(cartItemId, quantity) {
+    try {
+        const item = await this.getInventoryById(cartItemId);
+        // Actually need to get the product ID from cart_items first
+        const cartItem = await supabase
+            .from('cart_items')
+            .select('i_id')
+            .eq('ci_id', cartItemId)
+            .single();
+        
+        if (cartItem) {
+            const product = await this.getInventoryById(cartItem.i_id);
+            const totalPrice = product.i_price * quantity;
+            
+            return await supabase
+                .from('cart_items')
+                .eq('ci_id', cartItemId)
+                .update({
+                    quantity: quantity,
+                    total_price: totalPrice
+                });
+        }
+    } catch (error) {
+        console.error('Update cart item quantity error:', error);
+        throw error;
+    }
+}
+
     async removeCartItem(cartItemId) {
         try {
             return await supabase
