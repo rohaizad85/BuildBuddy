@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuildBuddy - Supabase Debug</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        h1 i {
+            color: #00d4ff;
+        }
+        
+        .debug-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #00d4ff;
+        }
+        
+        .debug-section h2 {
+            margin-bottom: 20px;
+            color: #00d4ff;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status-success {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .status-error {
+            background: #f44336;
+            color: white;
+        }
+        
+        .status-pending {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .log-item {
+            padding: 12px 15px;
+            background: #0f1522;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            border-left: 3px solid;
+        }
+        
+        .log-success {
+            border-left-color: #4CAF50;
+        }
+        
+        .log-error {
+            border-left-color: #f44336;
+        }
+        
+        .log-info {
+            border-left-color: #00d4ff;
+        }
+        
+        .log-warning {
+            border-left-color: #ff9800;
+        }
+        
+        .btn {
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #00b8e6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #2a3a5c;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #3a4a6c;
+        }
+        
+        .table-preview {
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #0f1522;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #1a1a2e;
+            padding: 12px;
+            text-align: left;
+            font-size: 13px;
+            color: #00d4ff;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #2a3a5c;
+            font-size: 13px;
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .count-badge {
+            background: #00d4ff20;
+            color: #00d4ff;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .summary-card {
+            background: #0f1522;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .summary-card h3 {
+            font-size: 32px;
+            color: #00d4ff;
+            margin-bottom: 5px;
+        }
+        
+        .summary-card p {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #2a3a5c;
+            border-top: 2px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <i class="fas fa-database"></i>
+            BuildBuddy Supabase Debug Console
+        </h1>
+        
+        <div class="debug-section">
+            <h2>
+                <i class="fas fa-plug"></i>
+                Connection Status
+                <span id="connStatus" class="status-badge status-pending">TESTING...</span>
+            </h2>
+            <div id="connectionLog"></div>
+            <button class="btn" onclick="testConnection()">
+                <i class="fas fa-sync-alt"></i> Test Connection
+            </button>
+            <button class="btn btn-secondary" onclick="testAllTables()">
+                <i class="fas fa-table"></i> Test All Tables
+            </button>
+            <button class="btn btn-secondary" onclick="clearLogs()">
+                <i class="fas fa-trash"></i> Clear Logs
+            </button>
+        </div>
+        
+        <div class="debug-section">
+            <h2>
+                <i class="fas fa-table"></i>
+                Table Status
+            </h2>
+            <div id="tableStatus"></div>
+            <div id="tableSummary" class="summary-grid"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h2>
+                <i class="fas fa-list"></i>
+                Detailed Logs
+            </h2>
+            <div id="detailedLogs"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h2>
+                <i class="fas fa-eye"></i>
+                Data Preview
+            </h2>
+            <div>
+                <button class="btn btn-secondary" onclick="previewTable('inventory')">Preview Inventory</button>
+                <button class="btn btn-secondary" onclick="previewTable('service')">Preview Services</button>
+                <button class="btn btn-secondary" onclick="previewTable('usersession')">Preview Sessions</button>
+                <button class="btn btn-secondary" onclick="previewTable('cart')">Preview Carts</button>
+            </div>
+            <div id="tablePreview" class="table-preview"></div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import SUPABASE_CONFIG from './config/config.js';
+        
+        const logs = [];
+        let tableCounts = {};
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = { timestamp, message, type };
+            logs.push(logEntry);
+            
+            const logDiv = document.getElementById('detailedLogs');
+            const logItem = document.createElement('div');
+            logItem.className = `log-item log-${type}`;
+            logItem.innerHTML = `<span style="color: #888;">[${timestamp}]</span> ${message}`;
+            logDiv.insertBefore(logItem, logDiv.firstChild);
+            
+            if (logs.length > 50) {
+                logDiv.removeChild(logDiv.lastChild);
+            }
+        }
+        
+        window.clearLogs = function() {
+            document.getElementById('detailedLogs').innerHTML = '';
+            logs.length = 0;
+            addLog('Logs cleared', 'info');
+        };
+        
+        async function supabaseRequest(endpoint, options = {}) {
+            const url = `${SUPABASE_CONFIG.url}/rest/v1/${endpoint}`;
+            const headers = {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            return response.json();
+        }
+        
+        window.testConnection = async function() {
+            const connStatus = document.getElementById('connStatus');
+            const connLog = document.getElementById('connectionLog');
+            
+            connStatus.textContent = 'TESTING...';
+            connStatus.className = 'status-badge status-pending';
+            connLog.innerHTML = '<div class="log-item log-info"><span class="loading"></span>Testing connection...</div>';
+            
+            addLog('Testing Supabase connection...', 'info');
+            
+            try {
+                const startTime = Date.now();
+                await supabaseRequest('inventory?limit=1');
+                const endTime = Date.now();
+                
+                connStatus.textContent = 'CONNECTED';
+                connStatus.className = 'status-badge status-success';
+                
+                connLog.innerHTML = `
+                    <div class="log-item log-success">
+                        <i class="fas fa-check-circle" style="color: #4CAF50;"></i> 
+                        Successfully connected to Supabase!
+                    </div>
+                    <div class="log-item log-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Project URL: ${SUPABASE_CONFIG.url}
+                    </div>
+                    <div class="log-item log-info">
+                        <i class="fas fa-clock"></i> 
+                        Response time: ${endTime - startTime}ms
+                    </div>
+                    <div class="log-item log-info">
+                        <i class="fas fa-key"></i> 
+                        Anon key length: ${SUPABASE_CONFIG.anonKey.length} characters
+                    </div>
+                `;
+                
+                addLog(`✅ Connected successfully! Response time: ${endTime - startTime}ms`, 'success');
+                
+                await testAllTables();
+                
+            } catch (error) {
+                connStatus.textContent = 'FAILED';
+                connStatus.className = 'status-badge status-error';
+                
+                connLog.innerHTML = `
+                    <div class="log-item log-error">
+                        <i class="fas fa-times-circle"></i> 
+                        Connection failed: ${error.message}
+                    </div>
+                    <div class="log-item log-warning">
+                        <i class="fas fa-lightbulb"></i> 
+                        Troubleshooting tips:
+                        <ul style="margin-top: 10px; margin-left: 20px;">
+                            <li>Check if Project URL is correct: ${SUPABASE_CONFIG.url}</li>
+                            <li>Verify anon key is valid (should start with 'eyJ...')</li>
+                            <li>Ensure tables exist in your database</li>
+                            <li>Check if Row Level Security (RLS) is enabled</li>
+                        </ul>
+                    </div>
+                `;
+                
+                addLog(`❌ Connection failed: ${error.message}`, 'error');
+            }
+        };
+        
+        window.testAllTables = async function() {
+            const tableStatus = document.getElementById('tableStatus');
+            tableStatus.innerHTML = '<div class="log-item log-info"><span class="loading"></span>Checking tables...</div>';
+            
+            addLog('Checking all tables...', 'info');
+            
+            const tables = ['inventory', 'service', 'usersession', 'cart', 'cart_items', 'cart_service', 'payment'];
+            const results = [];
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const table of tables) {
+                try {
+                    const data = await supabaseRequest(`${table}?limit=1000`);
+                    const count = data.length;
+                    tableCounts[table] = count;
+                    
+                    results.push({
+                        table,
+                        status: 'success',
+                        count,
+                        message: `✅ ${table}: ${count} records found`
+                    });
+                    
+                    successCount++;
+                    addLog(`✅ Table '${table}' accessible - ${count} records`, 'success');
+                    
+                } catch (error) {
+                    results.push({
+                        table,
+                        status: 'error',
+                        count: 0,
+                        message: `❌ ${table}: ${error.message}`
+                    });
+                    
+                    failCount++;
+                    addLog(`❌ Table '${table}' failed: ${error.message}`, 'error');
+                }
+            }
+            
+            tableStatus.innerHTML = results.map(r => `
+                <div class="log-item ${r.status === 'success' ? 'log-success' : 'log-error'}">
+                    ${r.message}
+                    ${r.status === 'success' ? `<span class="count-badge">${r.count} rows</span>` : ''}
+                </div>
+            `).join('');
+            
+            updateSummary();
+            
+            addLog(`Table check complete: ${successCount} accessible, ${failCount} failed`, 'info');
+        };
+        
+        function updateSummary() {
+            const summaryDiv = document.getElementById('tableSummary');
+            
+            const tables = [
+                { name: 'inventory', icon: 'fa-box', color: '#4CAF50' },
+                { name: 'service', icon: 'fa-tools', color: '#2196F3' },
+                { name: 'usersession', icon: 'fa-users', color: '#9C27B0' },
+                { name: 'cart', icon: 'fa-shopping-cart', color: '#FF9800' }
+            ];
+            
+            summaryDiv.innerHTML = tables.map(t => `
+                <div class="summary-card">
+                    <i class="fas ${t.icon}" style="font-size: 24px; color: ${t.color}; margin-bottom: 10px;"></i>
+                    <h3>${tableCounts[t.name] || 0}</h3>
+                    <p>${t.name}</p>
+                </div>
+            `).join('');
+        }
+        
+        window.previewTable = async function(tableName) {
+            const previewDiv = document.getElementById('tablePreview');
+            previewDiv.innerHTML = '<div class="log-item log-info"><span class="loading"></span>Loading data...</div>';
+            
+            addLog(`Previewing table: ${tableName}`, 'info');
+            
+            try {
+                const data = await supabaseRequest(`${tableName}?limit=5`);
+                
+                if (data.length === 0) {
+                    previewDiv.innerHTML = `
+                        <div class="log-item log-warning">
+                            <i class="fas fa-info-circle"></i> 
+                            Table '${tableName}' is empty. Run the seed SQL to populate data.
+                        </div>
+                    `;
+                    addLog(`Table '${tableName}' is empty`, 'warning');
+                    return;
+                }
+                
+                const columns = Object.keys(data[0]);
+                const displayColumns = columns.slice(0, 6);
+                
+                let html = '<table><thead><tr>';
+                displayColumns.forEach(col => {
+                    html += `<th>${col}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                
+                data.forEach(row => {
+                    html += '<tr>';
+                    displayColumns.forEach(col => {
+                        let value = row[col];
+                        if (value === null) value = '<span style="color: #666;">null</span>';
+                        else if (typeof value === 'object') value = JSON.stringify(value).substring(0, 30);
+                        else value = String(value).substring(0, 30);
+                        html += `<td>${value}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                html += `<p style="margin-top: 10px; color: #888;">Showing ${data.length} of ${tableCounts[tableName]} records</p>`;
+                
+                previewDiv.innerHTML = html;
+                addLog(`Previewed ${data.length} records from '${tableName}'`, 'success');
+                
+            } catch (error) {
+                previewDiv.innerHTML = `
+                    <div class="log-item log-error">
+                        <i class="fas fa-times-circle"></i> 
+                        Failed to load data: ${error.message}
+                    </div>
+                `;
+                addLog(`Failed to preview '${tableName}': ${error.message}`, 'error');
+            }
+        };
+        
+        window.addEventListener('load', () => {
+            addLog('Debug console initialized', 'info');
+            addLog(`Project URL: ${SUPABASE_CONFIG.url}`, 'info');
+            
+            const anonKeyPreview = SUPABASE_CONFIG.anonKey.substring(0, 20) + '...';
+            addLog(`Anon key: ${anonKeyPreview}`, 'info');
+            
+            testConnection();
+        });
+    </script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</body>
+</html>

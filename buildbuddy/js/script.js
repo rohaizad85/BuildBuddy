@@ -1,26 +1,4 @@
-const products = [
-    { id: 1, name: "Intel Core i5-13600K", category: "cpu", price: 1299, socket: "LGA1700", specs: "14 Cores, 5.1 GHz" },
-    { id: 2, name: "AMD Ryzen 7 7800X3D", category: "cpu", price: 1599, socket: "AM5", specs: "8 Cores, 5.0 GHz" },
-    { id: 3, name: "Intel Core i9-14900K", category: "cpu", price: 2399, socket: "LGA1700", specs: "24 Cores, 6.0 GHz" },
-    { id: 4, name: "ASUS ROG B760-F", category: "motherboard", price: 899, socket: "LGA1700", ramType: "DDR5", specs: "ATX, WiFi 6" },
-    { id: 5, name: "MSI B650 Tomahawk", category: "motherboard", price: 799, socket: "AM5", ramType: "DDR5", specs: "ATX, PCIe 5.0" },
-    { id: 6, name: "Gigabyte Z790 Aorus", category: "motherboard", price: 1299, socket: "LGA1700", ramType: "DDR5", specs: "ATX, Thunderbolt" },
-    { id: 7, name: "Corsair Vengeance 16GB", category: "ram", price: 299, ramType: "DDR5", speed: "5600MHz", specs: "2x8GB Kit" },
-    { id: 8, name: "Kingston Fury 32GB", category: "ram", price: 499, ramType: "DDR5", speed: "6000MHz", specs: "2x16GB Kit" },
-    { id: 9, name: "G.Skill Trident 32GB", category: "ram", price: 549, ramType: "DDR5", speed: "6400MHz", specs: "2x16GB RGB" },
-    { id: 10, name: "NVIDIA RTX 4070", category: "gpu", price: 2499, specs: "12GB GDDR6X" },
-    { id: 11, name: "AMD Radeon RX 7800 XT", category: "gpu", price: 2199, specs: "16GB GDDR6" },
-    { id: 12, name: "NVIDIA RTX 4080", category: "gpu", price: 4599, specs: "16GB GDDR6X" }
-];
-
-const services = [
-    { id: 1, name: "PC Repair", description: "Diagnostic and repair service for all issues", price: 80, icon: "fa-tools" },
-    { id: 2, name: "PC Assembly", description: "Full custom PC building service by experts", price: 150, icon: "fa-computer" },
-    { id: 3, name: "Maintenance", description: "Cleaning, thermal paste replacement, optimization", price: 60, icon: "fa-broom" },
-    { id: 4, name: "OS Installation", description: "Windows/Linux setup with drivers", price: 50, icon: "fa-windows" },
-    { id: 5, name: "Data Recovery", description: "Recover lost or corrupted data", price: 200, icon: "fa-database" },
-    { id: 6, name: "Upgrade Service", description: "Professional component upgrade installation", price: 100, icon: "fa-arrow-up" }
-];
+import dataService from './data-service.js';
 
 let selectedParts = {
     cpu: null,
@@ -29,15 +7,81 @@ let selectedParts = {
     gpu: null
 };
 
-let cart = [];
+let inventoryData = [];
+let servicesData = [];
 let compatibilityMode = true;
+let cart = [];
 
 const isBuilderPage = window.location.pathname.includes('builder.html');
 
-if (isBuilderPage) {
-    initializeBuilderPage();
-} else {
-    initializeHomePage();
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadInitialData();
+    
+    if (isBuilderPage) {
+        initializeBuilderPage();
+    } else {
+        initializeHomePage();
+    }
+});
+
+async function loadInitialData() {
+    try {
+        showLoading(true);
+        
+        inventoryData = await dataService.getInventory();
+        servicesData = await dataService.getServices();
+        
+        if (dataService.currentCartId) {
+            await updateCartDisplay();
+        }
+        
+        console.log('Data loaded successfully');
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showError('Failed to load data. Please refresh the page.');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function showLoading(show) {
+    const loader = document.getElementById('loadingOverlay');
+    if (show) {
+        if (!loader) {
+            const div = document.createElement('div');
+            div.id = 'loadingOverlay';
+            div.innerHTML = '<div class="loader"></div>';
+            div.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+            `;
+            document.body.appendChild(div);
+        }
+    } else {
+        if (loader) loader.remove();
+    }
+}
+
+function showError(message) {
+    const modal = document.getElementById('compatibilityModal') || document.getElementById('serviceModal');
+    if (modal) {
+        const modalMessage = document.getElementById('modalMessage');
+        modalMessage.innerHTML = `
+            <div style="text-align: center;">
+                <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
+                <p>${message}</p>
+            </div>
+        `;
+        modal.style.display = 'flex';
+    }
 }
 
 function initializeHomePage() {
@@ -57,29 +101,29 @@ function renderProducts(category = 'all') {
     if (!productsGrid) return;
     
     const filteredProducts = category === 'all' 
-        ? products 
-        : products.filter(p => p.category === category);
+        ? inventoryData 
+        : inventoryData.filter(p => p.i_category === category);
     
     productsGrid.innerHTML = filteredProducts.map(product => {
-        const isSelected = selectedParts[product.category] === product.id;
+        const isSelected = selectedParts[product.i_category] === product.i_id;
         
         return `
             <div class="product-card ${isSelected ? 'selected' : ''}">
-                ${product.category === 'cpu' ? '<span class="product-badge">CPU</span>' : ''}
-                ${product.category === 'motherboard' ? '<span class="product-badge">MB</span>' : ''}
-                ${product.category === 'ram' ? '<span class="product-badge">RAM</span>' : ''}
-                ${product.category === 'gpu' ? '<span class="product-badge">GPU</span>' : ''}
+                <span class="product-badge">${product.i_category.toUpperCase()}</span>
                 <div class="product-image">
-                    <i class="fas fa-${getIconForCategory(product.category)}"></i>
+                    <i class="fas fa-${getIconForCategory(product.i_category)}"></i>
                 </div>
-                <h4>${product.name}</h4>
-                <div class="product-specs">${product.specs}</div>
-                <div class="product-price">RM ${product.price}</div>
+                <h4>${product.i_name}</h4>
+                <div class="product-specs">${product.i_brand || ''}</div>
+                <div class="product-price">RM ${product.i_price}</div>
+                <div class="product-stock ${product.i_quantity < 5 ? 'low-stock' : ''}">
+                    <i class="fas fa-box"></i> ${product.i_quantity} in stock
+                </div>
                 <div class="product-actions">
-                    <button class="btn-add" onclick="addToCart(${product.id})">
+                    <button class="btn-add" onclick="window.addToCart(${product.i_id})">
                         <i class="fas fa-cart-plus"></i> Add
                     </button>
-                    <button class="btn-select" onclick="selectForBuild(${product.id})">
+                    <button class="btn-select" onclick="window.selectForBuild(${product.i_id})">
                         ${isSelected ? 'Selected' : 'Select'}
                     </button>
                 </div>
@@ -93,7 +137,10 @@ function getIconForCategory(category) {
         cpu: 'microchip',
         motherboard: 'square',
         ram: 'memory',
-        gpu: 'tv'
+        gpu: 'tv',
+        storage: 'hdd',
+        psu: 'plug',
+        cooler: 'fan'
     };
     return icons[category] || 'box';
 }
@@ -102,72 +149,85 @@ function renderServices() {
     const servicesGrid = document.getElementById('servicesGrid');
     if (!servicesGrid) return;
     
-    servicesGrid.innerHTML = services.map(service => `
+    servicesGrid.innerHTML = servicesData.map(service => `
         <div class="service-card">
-            <i class="fas ${service.icon}"></i>
-            <h4>${service.name}</h4>
-            <p>${service.description}</p>
-            <div class="service-price">RM ${service.price}</div>
-            <button class="btn-book" onclick="bookService(${service.id})">
+            <i class="fas ${getServiceIcon(service.service_category)}"></i>
+            <h4>${service.service_name}</h4>
+            <p>${service.service_duration || 'Contact for duration'}</p>
+            <div class="service-price">RM ${service.service_price}</div>
+            <button class="btn-book" onclick="window.bookService(${service.service_id})">
                 Book Now
             </button>
         </div>
     `).join('');
 }
 
-function selectForBuild(productId) {
-    const product = products.find(p => p.id === productId);
+function getServiceIcon(category) {
+    const icons = {
+        repair: 'fa-tools',
+        assembly: 'fa-computer',
+        upgrade: 'fa-arrow-up',
+        software: 'fa-windows',
+        recovery: 'fa-database',
+        maintenance: 'fa-broom'
+    };
+    return icons[category] || 'fa-wrench';
+}
+
+async function selectForBuild(productId) {
+    const product = inventoryData.find(p => p.i_id === productId);
     
-    if (compatibilityMode && !checkCompatibility(product)) {
+    if (compatibilityMode && !await checkCompatibility(product)) {
         return;
     }
     
-    selectedParts[product.category] = productId;
+    selectedParts[product.i_category] = productId;
     updateSelectedPartsDisplay();
     updateBuildSummary();
     renderProducts(getCurrentCategory());
     
     if (compatibilityMode) {
-        showSuccessMessage(`${product.name} added to build! Compatible with current selection.`);
+        showSuccessMessage(`${product.i_name} added to build!`);
     }
 }
 
-function checkCompatibility(newPart) {
+async function checkCompatibility(newPart) {
     let isCompatible = true;
     let message = '';
     let suggestion = '';
     
-    if (newPart.category === 'motherboard' && selectedParts.cpu) {
-        const cpu = products.find(p => p.id === selectedParts.cpu);
-        if (cpu.socket !== newPart.socket) {
+    if (newPart.i_category === 'cpu' && selectedParts.motherboard) {
+        const mb = inventoryData.find(p => p.i_id === selectedParts.motherboard);
+        if (!isCompatibleCPU(newPart, mb)) {
             isCompatible = false;
-            message = `CPU socket (${cpu.socket}) does not match motherboard socket (${newPart.socket}).`;
-            suggestion = `Try selecting a motherboard with ${cpu.socket} socket.`;
+            message = `CPU may not be compatible with selected motherboard.`;
+            suggestion = `Check socket compatibility before purchasing.`;
         }
     }
     
-    if (newPart.category === 'cpu' && selectedParts.motherboard) {
-        const mb = products.find(p => p.id === selectedParts.motherboard);
-        if (mb.socket !== newPart.socket) {
+    if (newPart.i_category === 'motherboard' && selectedParts.cpu) {
+        const cpu = inventoryData.find(p => p.i_id === selectedParts.cpu);
+        if (!isCompatibleCPU(cpu, newPart)) {
             isCompatible = false;
-            message = `CPU socket (${newPart.socket}) does not match motherboard socket (${mb.socket}).`;
-            suggestion = `Try selecting a CPU with ${mb.socket} socket.`;
-        }
-    }
-    
-    if (newPart.category === 'ram' && selectedParts.motherboard) {
-        const mb = products.find(p => p.id === selectedParts.motherboard);
-        if (mb.ramType !== newPart.ramType) {
-            isCompatible = false;
-            message = `RAM type (${newPart.ramType}) is not compatible with motherboard (${mb.ramType}).`;
-            suggestion = `Please select ${mb.ramType} RAM for this motherboard.`;
+            message = `Motherboard may not be compatible with selected CPU.`;
+            suggestion = `Check socket compatibility before purchasing.`;
         }
     }
     
     if (!isCompatible) {
-        showModal('Incompatible Parts Detected', message, suggestion);
+        showModal('Compatibility Warning', message, suggestion);
         return false;
     }
+    
+    return true;
+}
+
+function isCompatibleCPU(cpu, motherboard) {
+    const cpuBrand = cpu.i_brand?.toLowerCase() || '';
+    const mbBrand = motherboard.i_brand?.toLowerCase() || '';
+    
+    if (cpuBrand.includes('intel') && mbBrand.includes('amd')) return false;
+    if (cpuBrand.includes('amd') && mbBrand.includes('intel')) return false;
     
     return true;
 }
@@ -177,12 +237,12 @@ function showModal(title, message, suggestion = '') {
     const modalMessage = document.getElementById('modalMessage');
     if (!modal || !modalMessage) return;
     
-    const isError = title.includes('Incompatible');
+    const isWarning = title.includes('Warning');
     
     modalMessage.innerHTML = `
         <div style="text-align: center;">
-            <i class="fas fa-${isError ? 'exclamation-triangle' : 'check-circle'}" 
-               style="font-size: 48px; color: ${isError ? '#ff9800' : '#4CAF50'}; margin-bottom: 20px;"></i>
+            <i class="fas fa-${isWarning ? 'exclamation-triangle' : 'check-circle'}" 
+               style="font-size: 48px; color: ${isWarning ? '#ff9800' : '#4CAF50'}; margin-bottom: 20px;"></i>
             <p style="font-size: 18px; font-weight: 600; margin-bottom: 10px;">${title}</p>
             <p style="margin-bottom: 15px;">${message}</p>
             ${suggestion ? `<p style="color: #00d4ff; background: #f0f0f5; padding: 12px; border-radius: 8px;">
@@ -218,8 +278,10 @@ function updateSelectedPartsDisplay() {
     const parts = [];
     for (const category in selectedParts) {
         if (selectedParts[category]) {
-            const part = products.find(p => p.id === selectedParts[category]);
-            parts.push(`${category.toUpperCase()}: ${part.name}`);
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) {
+                parts.push(`${category.toUpperCase()}: ${part.i_name}`);
+            }
         }
     }
     display.textContent = parts.length ? parts.join(' | ') : 'Start by selecting a CPU or Motherboard';
@@ -235,17 +297,19 @@ function updateBuildSummary() {
     
     for (const category in selectedParts) {
         if (selectedParts[category]) {
-            const part = products.find(p => p.id === selectedParts[category]);
-            total += part.price;
-            html += `
-                <div class="build-item">
-                    <div>
-                        <div class="build-item-category">${category}</div>
-                        <div class="build-item-name">${part.name}</div>
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) {
+                total += parseFloat(part.i_price);
+                html += `
+                    <div class="build-item">
+                        <div>
+                            <div class="build-item-category">${category}</div>
+                            <div class="build-item-name">${part.i_name}</div>
+                        </div>
+                        <div class="build-item-price">RM ${part.i_price}</div>
                     </div>
-                    <div class="build-item-price">RM ${part.price}</div>
-                </div>
-            `;
+                `;
+            }
         }
     }
     
@@ -257,23 +321,47 @@ function updateBuildSummary() {
     buildTotal.textContent = `RM ${total}`;
 }
 
-function addToCart(productId) {
-    const product = products.find(p => p.id === productId);
-    cart.push(product);
-    updateCartCount();
-    showSuccessMessage(`${product.name} added to cart!`);
+async function addToCart(productId) {
+    try {
+        await dataService.addToCart(productId, 1);
+        await updateCartDisplay();
+        
+        const product = inventoryData.find(p => p.i_id === productId);
+        showSuccessMessage(`${product.i_name} added to cart!`);
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showError('Failed to add item to cart');
+    }
 }
 
-function updateCartCount() {
-    const cartCounts = document.querySelectorAll('.cart-count');
-    cartCounts.forEach(count => count.textContent = cart.length);
+async function bookService(serviceId) {
+    try {
+        await dataService.addServiceToCart(serviceId);
+        await updateCartDisplay();
+        
+        const service = servicesData.find(s => s.service_id === serviceId);
+        showModal('Service Booked!', 
+            `Your ${service.service_name} service has been added to cart.`,
+            'Proceed to checkout to confirm your booking.');
+    } catch (error) {
+        console.error('Error booking service:', error);
+        showError('Failed to book service');
+    }
 }
 
-function bookService(serviceId) {
-    const service = services.find(s => s.id === serviceId);
-    showModal('Service Booked!', 
-        `Your ${service.name} service has been scheduled. Our technician will contact you within 24 hours.`,
-        'Remember: Customers who purchased from us get 10% off on all services!');
+async function updateCartDisplay() {
+    try {
+        const cartItems = await dataService.getCartItems();
+        const cartServices = await dataService.getCartServices();
+        
+        cart = [...cartItems, ...cartServices];
+        
+        const totalItems = cartItems.length + cartServices.length;
+        const cartCounts = document.querySelectorAll('.cart-count');
+        cartCounts.forEach(count => count.textContent = totalItems);
+    } catch (error) {
+        console.error('Error updating cart:', error);
+    }
 }
 
 function getCurrentCategory() {
@@ -299,12 +387,17 @@ function setupBuilderListeners() {
     
     const completeBtn = document.getElementById('completeBuildBtn');
     if (completeBtn) {
-        completeBtn.addEventListener('click', () => {
+        completeBtn.addEventListener('click', async () => {
             const partCount = Object.values(selectedParts).filter(v => v).length;
             if (partCount < 3) {
-                showModal('Build Incomplete', 'Please select at least CPU, Motherboard, and RAM to complete your build.');
+                showModal('Build Incomplete', 'Please select at least CPU, Motherboard, and RAM.');
             } else {
-                showSuccessMessage('Build completed! Proceeding to checkout...');
+                for (const category in selectedParts) {
+                    if (selectedParts[category]) {
+                        await addToCart(selectedParts[category]);
+                    }
+                }
+                showSuccessMessage('Build completed! All parts added to cart.');
             }
         });
     }
@@ -334,4 +427,6 @@ function setupModalListeners() {
     });
 }
 
-updateCartCount();
+window.addToCart = addToCart;
+window.selectForBuild = selectForBuild;
+window.bookService = bookService;
