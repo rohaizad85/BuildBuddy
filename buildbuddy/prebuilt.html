@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pre-Built PCs - BuildBuddy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .prebuilt-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+        }
+        
+        .prebuilt-header h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        
+        .prebuilt-header p {
+            color: #ccc;
+            font-size: 18px;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: #00d4ff;
+            color: #1a1a2e;
+            border-color: #00d4ff;
+        }
+        
+        .prebuilt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .prebuilt-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .prebuilt-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        
+        .prebuilt-image {
+            width: 100%;
+            height: 220px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .prebuilt-image i {
+            font-size: 80px;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .prebuilt-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-beginner { background: #4CAF50; color: white; }
+        .badge-gaming { background: #ff9800; color: white; }
+        .badge-elite { background: #f44336; color: white; }
+        .badge-budget { background: #2196F3; color: white; }
+        .badge-creator { background: #9C27B0; color: white; }
+        
+        .prebuilt-content {
+            padding: 25px;
+        }
+        
+        .prebuilt-name {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .prebuilt-desc {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .prebuilt-specs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .spec-tag {
+            background: #f0f0f5;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #555;
+        }
+        
+        .spec-tag i {
+            margin-right: 5px;
+            color: #00d4ff;
+        }
+        
+        .prebuilt-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .prebuilt-price {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        
+        .stock-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .in-stock {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .low-stock {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        
+        .out-of-stock {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+            grid-column: 1 / -1;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f0f0f5;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .back-link {
+            color: #ccc;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+            transition: color 0.3s;
+        }
+        
+        .back-link:hover {
+            color: #00d4ff;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="builder.html" class="nav-link">PC Builder</a>
+                <a href="prebuilt.html" class="nav-link active">Pre-Built PCs</a>
+                <a href="index.html#services" class="nav-link">Services</a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn">
+                    <i class="fas fa-user"></i>
+                    Login
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="prebuilt-header">
+            <div class="container">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+                <h1><i class="fas fa-desktop"></i> Pre-Built Gaming PCs</h1>
+                <p>Ready-to-ship systems, professionally built and tested</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all">All Systems</button>
+                <button class="filter-btn" data-filter="beginner">Beginner</button>
+                <button class="filter-btn" data-filter="gaming">Gaming</button>
+                <button class="filter-btn" data-filter="elite">Elite</button>
+                <button class="filter-btn" data-filter="budget">Budget</button>
+                <button class="filter-btn" data-filter="creator">Creator</button>
+            </div>
+
+            <div id="prebuiltGrid" class="prebuilt-grid">
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading pre-built PCs...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>BuildBuddy</h4>
+                    <p>Your trusted PC building companion.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="index.html">Home</a>
+                    <a href="builder.html">PC Builder</a>
+                    <a href="prebuilt.html">Pre-Built PCs</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-phone"></i> +60 12-345 6789</p>
+                    <p><i class="fas fa-envelope"></i> support@buildbuddy.my</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    // Check login status
+    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+    if (user) {
+        const userData = JSON.parse(user);
+        const loginBtn = document.querySelector('.login-btn');
+        if (loginBtn) {
+            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
+            loginBtn.onclick = () => window.location.href = 'auth.html';
+        }
+    }
+    </script>
+
+    <script type="module" src="js/prebuilt.js"></script>
+</body>
+</html>

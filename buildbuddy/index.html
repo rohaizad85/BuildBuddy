@@ -10,24 +10,24 @@
 <body>
     <header class="header">
         <div class="container">
-            <div class="logo">
+            <div class="logo" onclick="window.location.href='index.html'">
                 <i class="fas fa-microchip"></i>
                 <h1>BuildBuddy</h1>
             </div>
             <nav class="nav">
                 <a href="index.html" class="nav-link active">Home</a>
                 <a href="builder.html" class="nav-link">PC Builder</a>
-                <a href="#" class="nav-link">Pre-Built PCs</a>
-                <a href="#" class="nav-link">Services</a>
+                <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
+                <a href="#services" class="nav-link">Services</a>
             </nav>
             <div class="header-actions">
-                <button class="cart-btn">
+                <button class="cart-btn" onclick="window.location.href='cart.html'">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count">0</span>
                 </button>
-                <button class="login-btn">
+                <button class="login-btn" onclick="window.location.href='auth.html'">
                     <i class="fas fa-user"></i>
-                    Login
+                    <span id="loginBtnText">Login</span>
                 </button>
             </div>
         </div>
@@ -66,7 +66,7 @@
                         <button class="option-btn">Start Building <i class="fas fa-arrow-right"></i></button>
                     </div>
 
-                    <div class="option-card featured">
+                    <div class="option-card featured" onclick="window.location.href='prebuilt.html'">
                         <div class="option-badge">Popular</div>
                         <div class="option-icon">
                             <i class="fas fa-desktop"></i>
@@ -99,52 +99,17 @@
 
             <section class="featured-prebuilds">
                 <h2 class="section-title">Featured Pre-Built Systems</h2>
-                <div class="prebuild-grid">
-                    <div class="prebuild-card">
-                        <div class="prebuild-badge beginner">Beginner</div>
-                        <div class="prebuild-image">
-                            <i class="fas fa-computer"></i>
-                        </div>
-                        <h3>Starter Essential</h3>
-                        <div class="prebuild-specs">
-                            <span>Intel i5-12400F</span>
-                            <span>16GB DDR4</span>
-                            <span>RTX 3050</span>
-                            <span>512GB SSD</span>
-                        </div>
-                        <div class="prebuild-price">RM 3,299</div>
-                        <button class="btn-outline">View Details</button>
+                <div class="prebuild-grid" id="featuredPrebuildGrid">
+                    <!-- Dynamic content will be loaded here -->
+                    <div class="loading-placeholder" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 40px; color: #00d4ff;"></i>
+                        <p style="margin-top: 20px; color: #666;">Loading featured PCs...</p>
                     </div>
-                    <div class="prebuild-card">
-                        <div class="prebuild-badge popular">Popular</div>
-                        <div class="prebuild-image">
-                            <i class="fas fa-computer"></i>
-                        </div>
-                        <h3>Gaming Pro</h3>
-                        <div class="prebuild-specs">
-                            <span>Ryzen 7 7800X3D</span>
-                            <span>32GB DDR5</span>
-                            <span>RTX 4070 Ti</span>
-                            <span>1TB NVMe</span>
-                        </div>
-                        <div class="prebuild-price">RM 7,899</div>
-                        <button class="btn-outline">View Details</button>
-                    </div>
-                    <div class="prebuild-card">
-                        <div class="prebuild-badge elite">Elite</div>
-                        <div class="prebuild-image">
-                            <i class="fas fa-server"></i>
-                        </div>
-                        <h3>Ultimate Workstation</h3>
-                        <div class="prebuild-specs">
-                            <span>Intel i9-14900K</span>
-                            <span>64GB DDR5</span>
-                            <span>RTX 4090</span>
-                            <span>2TB NVMe</span>
-                        </div>
-                        <div class="prebuild-price">RM 15,999</div>
-                        <button class="btn-outline">View Details</button>
-                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn-primary" onclick="window.location.href='prebuilt.html'">
+                        View All Pre-Built PCs <i class="fas fa-arrow-right"></i>
+                    </button>
                 </div>
             </section>
 
@@ -205,8 +170,8 @@
                     <h4>Quick Links</h4>
                     <a href="index.html">Home</a>
                     <a href="builder.html">PC Builder</a>
-                    <a href="#">Pre-Built PCs</a>
-                    <a href="#">Services</a>
+                    <a href="prebuilt.html">Pre-Built PCs</a>
+                    <a href="#services">Services</a>
                 </div>
                 <div class="footer-section">
                     <h4>Contact</h4>
@@ -219,6 +184,106 @@
             </div>
         </div>
     </footer>
+
+    <script type="module">
+        import supabase from './js/supabase-client.js';
+        
+        // Load featured pre-built PCs
+        async function loadFeaturedPrebuilts() {
+            const grid = document.getElementById('featuredPrebuildGrid');
+            
+            try {
+                const { data: bundles, error } = await supabase
+                    .from('bundles')
+                    .select('*')
+                    .order('bundle_price')
+                    .limit(3);
+                
+                if (error) throw error;
+                
+                if (!bundles || bundles.length === 0) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                            <i class="fas fa-box-open" style="font-size: 40px; color: #ccc;"></i>
+                            <p style="margin-top: 20px; color: #666;">No pre-built PCs available yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = bundles.map(bundle => {
+                    const badgeClass = getBadgeClass(bundle.bundle_category);
+                    const specs = bundle.bundle_specs || {};
+                    
+                    return `
+                        <div class="prebuild-card" onclick="window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">
+                            <div class="prebuild-badge ${badgeClass}">${bundle.bundle_category || 'Standard'}</div>
+                            <div class="prebuild-image">
+                                <i class="fas fa-computer"></i>
+                            </div>
+                            <h3>${bundle.bundle_name}</h3>
+                            <div class="prebuild-specs">
+                                ${specs.cpu ? `<span>${specs.cpu}</span>` : ''}
+                                ${specs.ram ? `<span>${specs.ram}</span>` : ''}
+                                ${specs.gpu ? `<span>${specs.gpu}</span>` : ''}
+                                ${specs.storage ? `<span>${specs.storage}</span>` : ''}
+                            </div>
+                            <div class="prebuild-price">RM ${parseFloat(bundle.bundle_price).toLocaleString()}</div>
+                            <button class="btn-outline" onclick="event.stopPropagation(); window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">View Details</button>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading featured prebuilts:', error);
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #f44336;"></i>
+                        <p style="margin-top: 20px; color: #666;">Failed to load pre-built PCs.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function getBadgeClass(category) {
+            const classes = {
+                'beginner': 'beginner',
+                'gaming': 'popular',
+                'elite': 'elite',
+                'budget': 'beginner',
+                'creator': 'elite'
+            };
+            return classes[category] || 'beginner';
+        }
+        
+        // Update cart count
+        function updateCartCount() {
+            const cartCount = document.querySelector('.cart-count');
+            if (cartCount) {
+                const savedCart = localStorage.getItem('buildbuddy_cart');
+                const count = savedCart ? JSON.parse(savedCart).length : 0;
+                cartCount.textContent = count;
+            }
+        }
+        
+        // Check login status
+        function checkLoginStatus() {
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            const loginBtnText = document.getElementById('loginBtnText');
+            
+            if (user && loginBtnText) {
+                const userData = JSON.parse(user);
+                loginBtnText.textContent = userData.name.split(' ')[0];
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFeaturedPrebuilts();
+            updateCartCount();
+            checkLoginStatus();
+        });
+    </script>
 
     <script type="module" src="js/script.js"></script>
 </body>

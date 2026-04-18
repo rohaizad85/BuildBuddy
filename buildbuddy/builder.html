@@ -112,5 +112,18 @@
     </footer>
 
     <script type="module" src="js/script.js"></script>
+
+    <script>
+    // Check login status
+    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+    if (user) {
+        const userData = JSON.parse(user);
+        const loginBtn = document.querySelector('.login-btn');
+        if (loginBtn) {
+            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
+            loginBtn.onclick = () => window.location.href = 'auth.html';
+        }
+    }
+</script>
 </body>
 </html>

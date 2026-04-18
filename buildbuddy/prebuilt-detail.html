@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Details - BuildBuddy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .detail-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 40px;
+        }
+        
+        .pc-detail-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 50px;
+        }
+        
+        .pc-image-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+        
+        .pc-main-image {
+            width: 100%;
+            height: 350px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .pc-main-image i {
+            font-size: 120px;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .pc-info-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+        
+        .pc-title {
+            font-size: 32px;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .pc-category-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+        
+        .badge-beginner { background: #4CAF50; color: white; }
+        .badge-gaming { background: #ff9800; color: white; }
+        .badge-elite { background: #f44336; color: white; }
+        .badge-budget { background: #2196F3; color: white; }
+        .badge-creator { background: #9C27B0; color: white; }
+        
+        .pc-price-large {
+            font-size: 42px;
+            font-weight: 700;
+            color: #00d4ff;
+            margin-bottom: 20px;
+        }
+        
+        .pc-description {
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        
+        .pc-stock-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            color: #666;
+        }
+        
+        .pc-stock-info i {
+            margin-right: 5px;
+            color: #00d4ff;
+        }
+        
+        .btn-large {
+            width: 100%;
+            padding: 18px;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #00d4ff;
+            color: #00d4ff;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .btn-outline:hover {
+            background: #00d4ff;
+            color: #1a1a2e;
+        }
+        
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .components-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            margin-bottom: 50px;
+        }
+        
+        .components-title {
+            font-size: 24px;
+            color: #1a1a2e;
+            margin-bottom: 25px;
+        }
+        
+        .components-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .component-card {
+            background: #f8f9fc;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .component-category {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .component-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 5px;
+        }
+        
+        .component-brand {
+            font-size: 13px;
+            color: #888;
+        }
+        
+        .warranty-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            margin-bottom: 50px;
+        }
+        
+        .warranty-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            text-align: center;
+        }
+        
+        .warranty-item i {
+            font-size: 40px;
+            color: #00d4ff;
+            margin-bottom: 15px;
+        }
+        
+        .warranty-item h4 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .warranty-item p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .stock-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .in-stock { background: #e8f5e9; color: #2e7d32; }
+        .low-stock { background: #fff3e0; color: #e65100; }
+        .out-of-stock { background: #ffebee; color: #c62828; }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+            background: white;
+            border-radius: 16px;
+        }
+        
+        @media (max-width: 768px) {
+            .pc-detail-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .warranty-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="builder.html" class="nav-link">PC Builder</a>
+                <a href="prebuilt.html" class="nav-link active">Pre-Built PCs</a>
+                <a href="index.html#services" class="nav-link">Services</a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn">
+                    <i class="fas fa-user"></i>
+                    Login
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="detail-header">
+            <div class="container">
+                <a href="prebuilt.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Pre-Built PCs</a>
+                <h1><i class="fas fa-desktop"></i> PC Details</h1>
+            </div>
+        </div>
+
+        <div class="container">
+            <div id="bundleDetailContainer">
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading PC details...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+        </div>
+    </footer>
+    
+    <script>
+    // Check login status
+    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+    if (user) {
+        const userData = JSON.parse(user);
+        const loginBtn = document.querySelector('.login-btn');
+        if (loginBtn) {
+            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
+            loginBtn.onclick = () => window.location.href = 'auth.html';
+        }
+    }
+    </script>
+
+    <script type="module" src="js/prebuilt-detail.js"></script>
+</body>
+</html>
