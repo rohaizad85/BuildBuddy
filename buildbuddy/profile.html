@@ -282,7 +282,7 @@
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="builder.html" class="nav-link">PC Builder</a>
                 <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
-                <a href="index.html#services" class="nav-link">Services</a>
+                <a href="service.html" class="nav-link">Services</a>
             </nav>
             <div class="header-actions">
                 <button class="cart-btn" onclick="window.location.href='cart.html'">
@@ -340,6 +340,14 @@
             </div>
         </div>
     </footer>
+
+    <script type="module">
+    import { initCart } from './js/cart-utils.js';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initCart();
+    });
+    </script>
 
     <script type="module" src="js/profile.js"></script>
 </body>

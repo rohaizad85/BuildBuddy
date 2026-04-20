@@ -1,4 +1,5 @@
 import supabase from './supabase-client.js';
+import { syncLocalCartToDatabase, updateCartCountDisplay, clearCartOnLogout } from './cart-utils.js';
 
 // Tab switching
 document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -92,7 +93,7 @@ function showSuccess(formType, message) {
     }
 }
 
-// Simple hash function (for demo purposes)
+// Simple hash function
 async function hashPassword(password) {
     const encoder = new TextEncoder();
     const data = encoder.encode(password);
@@ -148,6 +149,10 @@ window.handleLogin = async function(event) {
             sessionStorage.setItem('buildbuddy_user', JSON.stringify(userData));
         }
         
+        // Sync local cart to database after successful login
+        await syncLocalCartToDatabase();
+        await updateCartCountDisplay();
+        
         showSuccess('login', 'Login successful! Redirecting...');
         
         setTimeout(() => {
@@ -161,7 +166,7 @@ window.handleLogin = async function(event) {
     }
 };
 
-// Handle Register with debug logging
+// Handle Register
 window.handleRegister = async function(event) {
     event.preventDefault();
     clearMessages();
@@ -174,29 +179,18 @@ window.handleRegister = async function(event) {
     const agreeTerms = document.getElementById('agreeTerms').checked;
     const btn = document.getElementById('registerBtn');
     
-    console.log('=== REGISTRATION DEBUG ===');
-    console.log('Name:', name);
-    console.log('Email:', email);
-    console.log('Phone:', phone || '(empty)');
-    console.log('Password length:', password.length);
-    console.log('Passwords match:', password === confirmPassword);
-    console.log('Terms agreed:', agreeTerms);
-    
     // Validation
     if (password !== confirmPassword) {
-        console.log('❌ Password validation failed: passwords do not match');
         showError('register', 'Passwords do not match');
         return;
     }
     
     if (password.length < 6) {
-        console.log('❌ Password validation failed: too short');
         showError('register', 'Password must be at least 6 characters');
         return;
     }
     
     if (!agreeTerms) {
-        console.log('❌ Terms not agreed');
         showError('register', 'Please agree to the Terms & Conditions');
         return;
     }
@@ -205,66 +199,33 @@ window.handleRegister = async function(event) {
     btn.innerHTML = '<span class="loading-spinner-small"></span> Creating account...';
     
     try {
-        // Step 1: Check if email exists
-        console.log('📧 Checking if email exists...');
-        
+        // Check if email exists
         const existingUser = await supabase
             .from('users')
             .select('email')
             .eq('email', email)
             .single();
         
-        console.log('Existing user check result:', existingUser);
-        
         if (existingUser) {
-            console.log('❌ Email already registered');
             throw new Error('Email already registered');
         }
         
-        console.log('✅ Email is available');
-        
-        // Step 2: Hash password
-        console.log('🔐 Hashing password...');
         const passwordHash = await hashPassword(password);
-        console.log('Password hash created (first 10 chars):', passwordHash.substring(0, 10) + '...');
         
-        // Step 3: Insert user
-        console.log('💾 Inserting user into database...');
-        
-        const userData = {
-            full_name: name,
-            email: email,
-            phone: phone || null,
-            password_hash: passwordHash
-        };
-        
-        console.log('User data to insert:', {
-            ...userData,
-            password_hash: '[HIDDEN]'
-        });
-        
-        // Try insert without select first
-        const insertResult = await supabase
-            .from('users')
-            .insert([userData]);
-        
-        console.log('Raw insert result:', insertResult);
-        
-        // Now try to fetch the inserted user
         const newUser = await supabase
             .from('users')
-            .select('*')
-            .eq('email', email)
+            .insert({
+                full_name: name,
+                email: email,
+                phone: phone || null,
+                password_hash: passwordHash
+            })
+            .select()
             .single();
         
-        console.log('Fetched new user:', newUser);
-        
         if (!newUser) {
-            console.log('❌ No user returned after insert');
-            throw new Error('Failed to create account - no data returned');
+            throw new Error('Failed to create account');
         }
-        
-        console.log('✅ User created successfully! User ID:', newUser.user_id);
         
         showSuccess('register', 'Account created successfully! You can now login.');
         
@@ -286,31 +247,13 @@ window.handleRegister = async function(event) {
         }, 2000);
         
     } catch (error) {
-        console.log('❌ REGISTRATION ERROR ❌');
-        console.log('Error object:', error);
-        console.log('Error message:', error.message);
-        console.log('Error details:', error.details);
-        console.log('Error hint:', error.hint);
-        console.log('Error code:', error.code);
-        
         let errorMessage = error.message;
         
-        // Check for specific error types
         if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
             errorMessage = 'Email already registered';
         } else if (error.message.includes('violates row-level security')) {
             errorMessage = 'Permission denied. Please run the RLS fix SQL.';
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-            errorMessage = 'Network error. Please check your connection.';
-        } else if (error.message.includes('400')) {
-            errorMessage = 'Bad request. Check if all required fields are provided.';
-        } else if (error.message.includes('401') || error.message.includes('403')) {
-            errorMessage = 'Authentication error. Check RLS policies.';
-        } else if (error.message.includes('500')) {
-            errorMessage = 'Server error. Check Supabase logs.';
         }
-        
-        console.log('Final error message:', errorMessage);
         
         showError('register', errorMessage);
         btn.disabled = false;
@@ -321,6 +264,14 @@ window.handleRegister = async function(event) {
 // Social login (placeholder)
 window.socialLogin = function(provider) {
     showError('login', `${provider} login coming soon!`);
+};
+
+// Handle Logout
+window.handleLogout = function() {
+    clearCartOnLogout();
+    localStorage.removeItem('buildbuddy_user');
+    sessionStorage.removeItem('buildbuddy_user');
+    window.location.href = 'index.html';
 };
 
 // Check if user is logged in
@@ -342,13 +293,10 @@ function checkAuth() {
 }
 
 // Update cart count
-function updateCartCount() {
-    const cartCount = document.querySelector('.cart-count');
-    if (cartCount) {
-        const savedCart = localStorage.getItem('buildbuddy_cart');
-        const count = savedCart ? JSON.parse(savedCart).length : 0;
-        cartCount.textContent = count;
-    }
+async function updateCartCount() {
+    const count = await updateCartCountDisplay();
+    const cartCounts = document.querySelectorAll('.cart-count');
+    cartCounts.forEach(el => el.textContent = count);
 }
 
 // Initialize

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Services - BuildBuddy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .services-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+        }
+        
+        .services-header h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        
+        .services-header p {
+            color: #ccc;
+            font-size: 18px;
+        }
+        
+        .back-link {
+            color: #ccc;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+            transition: color 0.3s;
+        }
+        
+        .back-link:hover {
+            color: #00d4ff;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: #00d4ff;
+            color: #1a1a2e;
+            border-color: #00d4ff;
+        }
+        
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .service-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+            border-color: #00d4ff;
+        }
+        
+        .service-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #00d4ff20, #00d4ff40);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .service-icon i {
+            font-size: 36px;
+            color: #00d4ff;
+        }
+        
+        .service-card h3 {
+            font-size: 20px;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .service-category {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+        
+        .category-repair { background: #ffebee; color: #c62828; }
+        .category-assembly { background: #e3f2fd; color: #1565c0; }
+        .category-upgrade { background: #fff3e0; color: #e65100; }
+        .category-software { background: #e8f5e9; color: #2e7d32; }
+        .category-recovery { background: #f3e5f5; color: #6a1b9a; }
+        .category-maintenance { background: #fff8e1; color: #f57f17; }
+        
+        .service-duration {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .service-duration i {
+            margin-right: 5px;
+            color: #00d4ff;
+        }
+        
+        .service-price {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 20px;
+        }
+        
+        .service-price small {
+            font-size: 14px;
+            font-weight: 400;
+            color: #666;
+        }
+        
+        .btn-book {
+            width: 100%;
+            padding: 14px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-book:hover {
+            background: #00b8e6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+            grid-column: 1 / -1;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f0f0f5;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .why-choose-us {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 50px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 28px;
+            color: #1a1a2e;
+            margin-bottom: 40px;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+        }
+        
+        .feature-item {
+            text-align: center;
+        }
+        
+        .feature-item i {
+            font-size: 40px;
+            color: #00d4ff;
+            margin-bottom: 20px;
+        }
+        
+        .feature-item h4 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .feature-item p {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="builder.html" class="nav-link">PC Builder</a>
+                <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
+                <a href="service.html" class="nav-link active">Services</a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn" onclick="window.location.href='cart.html'">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn" id="loginBtn">
+                    <i class="fas fa-user"></i>
+                    <span id="loginBtnText">Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="services-header">
+            <div class="container">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+                <h1><i class="fas fa-tools"></i> Technical Services</h1>
+                <p>Professional computer repair, maintenance, and assembly services</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all">All Services</button>
+                <button class="filter-btn" data-filter="repair">Repair</button>
+                <button class="filter-btn" data-filter="assembly">Assembly</button>
+                <button class="filter-btn" data-filter="upgrade">Upgrade</button>
+                <button class="filter-btn" data-filter="software">Software</button>
+                <button class="filter-btn" data-filter="recovery">Recovery</button>
+                <button class="filter-btn" data-filter="maintenance">Maintenance</button>
+            </div>
+
+            <div id="servicesGrid" class="services-grid">
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading services...</p>
+                </div>
+            </div>
+
+            <div class="why-choose-us">
+                <h2 class="section-title">Why Choose Our Services?</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <i class="fas fa-user-check"></i>
+                        <h4>Certified Technicians</h4>
+                        <p>All our technicians are certified professionals</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-clock"></i>
+                        <h4>Same-Day Service</h4>
+                        <p>Quick turnaround on most repairs</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <h4>90-Day Warranty</h4>
+                        <p>All services come with warranty</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-tag"></i>
+                        <h4>Member Discount</h4>
+                        <p>10% off for registered members</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="serviceModal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="modal-header">
+                <i class="fas fa-calendar-check"></i>
+                <h3>Book Service</h3>
+            </div>
+            <div class="modal-body" id="modalMessage">
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>BuildBuddy</h4>
+                    <p>Your trusted PC building companion since 2024.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="index.html">Home</a>
+                    <a href="builder.html">PC Builder</a>
+                    <a href="prebuilt.html">Pre-Built PCs</a>
+                    <a href="service.html">Services</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-phone"></i> +60 12-345 6789</p>
+                    <p><i class="fas fa-envelope"></i> support@buildbuddy.my</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="js/service.js"></script>
+</body>
+</html>

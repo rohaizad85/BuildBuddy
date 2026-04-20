@@ -1,4 +1,5 @@
 import dataService from './data-service.js';
+import { getCartCount, updateCartCountDisplay, addToCart as addToCartUtil } from './cart-utils.js';
 
 let selectedParts = {
     cpu: null,
@@ -10,11 +11,13 @@ let selectedParts = {
 let inventoryData = [];
 let servicesData = [];
 let compatibilityMode = true;
-let cart = [];
 
 const isBuilderPage = window.location.pathname.includes('builder.html');
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Update cart count first
+    await updateCartCountDisplay();
+    
     await loadInitialData();
     
     if (isBuilderPage) {
@@ -30,10 +33,6 @@ async function loadInitialData() {
         
         inventoryData = await dataService.getInventory();
         servicesData = await dataService.getServices();
-        
-        if (dataService.currentCartId) {
-            await updateCartDisplay();
-        }
         
         console.log('Data loaded successfully');
     } catch (error) {
@@ -323,10 +322,19 @@ function updateBuildSummary() {
 
 async function addToCart(productId) {
     try {
-        await dataService.addToCart(productId, 1);
-        await updateCartDisplay();
-        
         const product = inventoryData.find(p => p.i_id === productId);
+        
+        // Use the cart-utils addToCart function
+        await addToCartUtil({
+            type: 'product',
+            id: productId,
+            name: product.i_name,
+            price: product.i_price
+        });
+        
+        // Update the display
+        await updateCartCountDisplay();
+        
         showSuccessMessage(`${product.i_name} added to cart!`);
     } catch (error) {
         console.error('Error adding to cart:', error);
@@ -336,31 +344,25 @@ async function addToCart(productId) {
 
 async function bookService(serviceId) {
     try {
-        await dataService.addServiceToCart(serviceId);
-        await updateCartDisplay();
-        
         const service = servicesData.find(s => s.service_id === serviceId);
+        
+        // Use the cart-utils addToCart function
+        await addToCartUtil({
+            type: 'service',
+            id: serviceId,
+            name: service.service_name,
+            price: service.service_price
+        });
+        
+        // Update the display
+        await updateCartCountDisplay();
+        
         showModal('Service Booked!', 
             `Your ${service.service_name} service has been added to cart.`,
             'Proceed to checkout to confirm your booking.');
     } catch (error) {
         console.error('Error booking service:', error);
         showError('Failed to book service');
-    }
-}
-
-async function updateCartDisplay() {
-    try {
-        const cartItems = await dataService.getCartItems();
-        const cartServices = await dataService.getCartServices();
-        
-        cart = [...cartItems, ...cartServices];
-        
-        const totalItems = cartItems.length + cartServices.length;
-        const cartCounts = document.querySelectorAll('.cart-count');
-        cartCounts.forEach(count => count.textContent = totalItems);
-    } catch (error) {
-        console.error('Error updating cart:', error);
     }
 }
 

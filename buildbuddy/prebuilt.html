@@ -223,7 +223,7 @@
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="builder.html" class="nav-link">PC Builder</a>
                 <a href="prebuilt.html" class="nav-link active">Pre-Built PCs</a>
-                <a href="index.html#services" class="nav-link">Services</a>
+                <a href="service.html" class="nav-link">Services</a>
             </nav>
             <div class="header-actions">
                 <button class="cart-btn">
@@ -291,17 +291,12 @@
         </div>
     </footer>
 
-    <script>
-    // Check login status
-    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-    if (user) {
-        const userData = JSON.parse(user);
-        const loginBtn = document.querySelector('.login-btn');
-        if (loginBtn) {
-            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
-            loginBtn.onclick = () => window.location.href = 'auth.html';
-        }
-    }
+    <script type="module">
+    import { initCart } from './js/cart-utils.js';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initCart();
+    });
     </script>
 
     <script type="module" src="js/prebuilt.js"></script>

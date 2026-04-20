@@ -223,6 +223,21 @@
             border-radius: 16px;
         }
         
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f0f0f5;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
         @media (max-width: 768px) {
             .pc-detail-container {
                 grid-template-columns: 1fr;
@@ -248,13 +263,13 @@
                 <a href="index.html#services" class="nav-link">Services</a>
             </nav>
             <div class="header-actions">
-                <button class="cart-btn">
+                <button class="cart-btn" onclick="window.location.href='cart.html'">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count">0</span>
                 </button>
                 <button class="login-btn" id="loginBtn">
-                <i class="fas fa-user"></i>
-                <span id="loginBtnText">Login</span>
+                    <i class="fas fa-user"></i>
+                    <span id="loginBtnText">Login</span>
                 </button>
             </div>
         </div>
@@ -284,17 +299,12 @@
         </div>
     </footer>
     
-    <script>
-    // Check login status
-    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-    if (user) {
-        const userData = JSON.parse(user);
-        const loginBtn = document.querySelector('.login-btn');
-        if (loginBtn) {
-            loginBtn.innerHTML = `<i class="fas fa-user"></i> ${userData.name.split(' ')[0]}`;
-            loginBtn.onclick = () => window.location.href = 'auth.html';
-        }
-    }
+    <script type="module">
+    import { initCart } from './js/cart-utils.js';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initCart();
+    });
     </script>
 
     <script type="module" src="js/prebuilt-detail.js"></script>

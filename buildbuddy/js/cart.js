@@ -48,6 +48,15 @@ function getUser() {
     return user ? JSON.parse(user) : null;
 }
 
+function getSessionId() {
+    let sessionId = localStorage.getItem('buildbuddy_session_id');
+    if (!sessionId) {
+        sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('buildbuddy_session_id', sessionId);
+    }
+    return sessionId;
+}
+
 async function loadDatabaseCart() {
     try {
         const dbCartItems = await dataService.getCartItems();
@@ -67,21 +76,6 @@ async function loadDatabaseCart() {
             serviceId: cs.service_id,
             quantity: 1
         }));
-        
-        // Merge localStorage items
-        const localCart = JSON.parse(localStorage.getItem('buildbuddy_cart')) || [];
-        for (const localItem of localCart) {
-            if (localItem.type === 'bundle') {
-                cartItems.push({
-                    id: `local_${Date.now()}_${Math.random()}`,
-                    type: 'bundle',
-                    bundleId: localItem.id,
-                    quantity: localItem.quantity,
-                    price: localItem.price,
-                    name: localItem.name
-                });
-            }
-        }
         
     } catch (error) {
         console.error('Error loading database cart:', error);
@@ -325,7 +319,7 @@ function renderCartItem(item, details) {
                 <span class="item-type">${details.type}</span>
             </div>
             <div class="cart-item-quantity">
-                <button class="quantity-btn" onclick="window.updateQuantity('${item.id}', -1)" ${item.quantity <= 1 ? 'disabled' : ''}>
+                <button class="quantity-btn" onclick="window.updateQuantity('${item.id}', -1)">
                     <i class="fas fa-minus"></i>
                 </button>
                 <span class="quantity-input">${item.quantity}</span>
@@ -393,11 +387,26 @@ function getServiceIcon(category) {
     return icons[category] || 'fa-wrench';
 }
 
-window.updateQuantity = function(itemId, change) {
-    const item = [...cartItems, ...cartServices].find(i => i.id === itemId);
+window.updateQuantity = async function(itemId, change) {
+    const allItems = [...cartItems, ...cartServices];
+    const item = allItems.find(i => i.id === itemId);
     if (!item) return;
     
     const newQuantity = item.quantity + change;
+    
+    // If quantity becomes 0, confirm removal
+    if (newQuantity === 0) {
+        const confirmed = await showConfirmDialog(
+            'Remove Item?',
+            'Do you want to remove this item from your cart?'
+        );
+        
+        if (confirmed) {
+            await removeItem(itemId, true);
+        }
+        return;
+    }
+    
     if (newQuantity < 1) return;
     
     item.quantity = newQuantity;
@@ -405,46 +414,50 @@ window.updateQuantity = function(itemId, change) {
     
     const user = getUser();
     if (user && !item.id.toString().startsWith('local_')) {
-        updateDatabaseQuantity(itemId, newQuantity);
+        await updateDatabaseQuantity(item, newQuantity);
     }
     
     renderCart();
     updateCartCount();
+    showToast(`Quantity updated to ${newQuantity}`, 'success');
 };
 
-async function updateDatabaseQuantity(itemId, quantity) {
+async function updateDatabaseQuantity(item, quantity) {
     try {
-        const cartItem = await supabase
-            .from('cart_items')
-            .select('i_id')
-            .eq('ci_id', itemId)
-            .single();
-        
-        if (cartItem) {
-            const product = await supabase
-                .from('inventory')
-                .select('i_price')
-                .eq('i_id', cartItem.i_id)
-                .single();
-            
+        if (item.type === 'product') {
+            const product = inventoryCache[item.productId];
             if (product) {
                 await supabase
                     .from('cart_items')
-                    .eq('ci_id', itemId)
+                    .eq('ci_id', item.id)
                     .update({
                         quantity: quantity,
                         total_price: product.i_price * quantity
                     });
             }
         }
+        // Note: Services don't have quantity in the current schema
     } catch (error) {
         console.error('Error updating quantity:', error);
+        showToast('Failed to update quantity', 'error');
     }
 }
 
-window.removeItem = async function(itemId) {
+window.removeItem = async function(itemId, skipConfirm = false) {
+    const confirmRemove = skipConfirm || await showConfirmDialog(
+        'Remove Item?',
+        'Are you sure you want to remove this item from your cart?'
+    );
+    
+    if (!confirmRemove) return;
+    
     const user = getUser();
     
+    // Find the item before removing
+    const item = [...cartItems, ...cartServices].find(i => i.id === itemId);
+    const itemName = item ? (item.name || 'Item') : 'Item';
+    
+    // Remove from arrays
     cartItems = cartItems.filter(i => i.id !== itemId);
     cartServices = cartServices.filter(s => s.id !== itemId);
     
@@ -457,7 +470,6 @@ window.removeItem = async function(itemId) {
                 .eq('ci_id', itemId)
                 .delete();
         } catch (error) {
-            // Try deleting from cart_service
             try {
                 await supabase
                     .from('cart_service')
@@ -471,8 +483,99 @@ window.removeItem = async function(itemId) {
     
     renderCart();
     updateCartCount();
-    showToast('Item removed from cart', 'success');
+    showToast(`${itemName} removed from cart`, 'success');
 };
+
+function showConfirmDialog(title, message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        `;
+        
+        dialog.innerHTML = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <i class="fas fa-trash-alt" style="font-size: 48px; color: #f44336;"></i>
+            </div>
+            <h3 style="color: #1a1a2e; margin-bottom: 10px; text-align: center;">${title}</h3>
+            <p style="color: #666; margin-bottom: 25px; text-align: center;">${message}</p>
+            <div style="display: flex; gap: 15px;">
+                <button id="confirmCancel" style="
+                    flex: 1;
+                    padding: 12px;
+                    border: 1px solid #e0e0e0;
+                    background: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: all 0.3s;
+                ">Cancel</button>
+                <button id="confirmOk" style="
+                    flex: 1;
+                    padding: 12px;
+                    border: none;
+                    background: #f44336;
+                    color: white;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: all 0.3s;
+                ">Remove</button>
+            </div>
+        `;
+        
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideUp {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            #confirmCancel:hover { background: #f5f5f5; }
+            #confirmOk:hover { background: #d32f2f; }
+        `;
+        document.head.appendChild(style);
+        
+        document.getElementById('confirmCancel').onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        };
+        
+        document.getElementById('confirmOk').onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        };
+        
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        };
+    });
+}
 
 function syncToLocalStorage() {
     const localCart = [
@@ -496,9 +599,14 @@ function syncToLocalStorage() {
 window.proceedToCheckout = function() {
     const user = getUser();
     if (!user) {
-        if (confirm('Please login to proceed with checkout. Go to login page?')) {
-            window.location.href = 'auth.html';
-        }
+        showConfirmDialog(
+            'Login Required',
+            'Please login to proceed with checkout. Go to login page?'
+        ).then(confirmed => {
+            if (confirmed) {
+                window.location.href = 'auth.html';
+            }
+        });
         return;
     }
     
@@ -514,7 +622,7 @@ function showToast(message, type = 'success') {
     toast.className = `custom-toast toast-${type}`;
     toast.innerHTML = `
         <div class="toast-content">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'} toast-icon"></i>
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} toast-icon"></i>
             <div class="toast-message">
                 <div class="toast-title">${type === 'success' ? 'Success' : 'Notice'}</div>
                 <div class="toast-text">${message}</div>
@@ -551,6 +659,8 @@ function showToast(message, type = 'success') {
                 transition: all 0.3s ease;
                 border-left: 4px solid #4CAF50;
             }
+            .custom-toast.toast-error { border-left-color: #f44336; }
+            .custom-toast.toast-error .toast-icon { color: #f44336; }
             .custom-toast.show { opacity: 1; transform: translateX(0); }
             .toast-content { display: flex; align-items: flex-start; padding: 16px 20px; gap: 15px; }
             .toast-icon { font-size: 24px; color: #4CAF50; }
@@ -572,9 +682,16 @@ function updateCartCount() {
 
 function checkLoginStatus() {
     const user = getUser();
+    const loginBtn = document.querySelector('.login-btn');
     const loginBtnText = document.getElementById('loginBtnText');
     
-    if (user && loginBtnText) {
+    if (user && loginBtn && loginBtnText) {
         loginBtnText.textContent = user.name.split(' ')[0];
+        loginBtn.onclick = () => window.location.href = 'profile.html';
+    } else if (loginBtn) {
+        loginBtn.onclick = () => window.location.href = 'auth.html';
+        if (loginBtnText) {
+            loginBtnText.textContent = 'Login';
+        }
     }
 }
