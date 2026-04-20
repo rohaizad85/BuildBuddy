@@ -136,11 +136,12 @@ window.handleLogin = async function(event) {
             .update({ last_login: new Date().toISOString() })
             .eq('user_id', user.user_id);
         
-        // Store user info
+        // Store user info with role
         const userData = {
             id: user.user_id,
             name: user.full_name,
-            email: user.email
+            email: user.email,
+            role: user.role || 'USER'
         };
         
         if (rememberMe) {
@@ -155,8 +156,13 @@ window.handleLogin = async function(event) {
         
         showSuccess('login', 'Login successful! Redirecting...');
         
+        // Redirect based on role
         setTimeout(() => {
-            window.location.href = 'index.html';
+            if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+                window.location.href = 'staff/staff-dashboard.html';
+            } else {
+                window.location.href = 'index.html';
+            }
         }, 1500);
         
     } catch (error) {
@@ -218,7 +224,8 @@ window.handleRegister = async function(event) {
                 full_name: name,
                 email: email,
                 phone: phone || null,
-                password_hash: passwordHash
+                password_hash: passwordHash,
+                role: 'USER'  // Default role for new registrations
             })
             .select()
             .single();
@@ -283,7 +290,13 @@ function checkAuth() {
     if (user && loginBtn && loginBtnText) {
         const userData = JSON.parse(user);
         loginBtnText.textContent = userData.name.split(' ')[0];
-        loginBtn.onclick = () => window.location.href = 'profile.html';
+        
+        // Check role for profile/dashboard redirect
+        if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+            loginBtn.onclick = () => window.location.href = 'staff/staff-dashboard.html';
+        } else {
+            loginBtn.onclick = () => window.location.href = 'profile.html';
+        }
     } else if (loginBtn) {
         loginBtn.onclick = () => window.location.href = 'auth.html';
         if (loginBtnText) {
