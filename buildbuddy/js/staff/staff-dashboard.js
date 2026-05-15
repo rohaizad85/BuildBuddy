@@ -1,57 +1,136 @@
 import supabase from '../supabase-client.js';
-import { getUser } from '../cart-utils.js';
 
 let allOrders = [];
+let allStaff = [];
 let currentFilter = 'ALL';
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkStaffAccess();
+    const hasAccess = await checkStaffAccess();
+    if (!hasAccess) return;
+    
+    showDashboard();
+    await loadStaff();
     await loadOrders();
-    await loadStats();
+    setupEventListeners();
 });
 
 async function checkStaffAccess() {
-    const user = getUser();
+    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
     
     if (!user) {
-        window.location.href = '../auth.html';
-        return;
+        showAccessDenied('Please log in to access the dashboard.');
+        return false;
     }
     
     try {
-        const userData = await supabase
-            .from('users')
-            .select('role')
-            .eq('user_id', user.id)
-            .single();
+        const userData = JSON.parse(user);
         
-        if (!userData || (userData.role !== 'STAFF' && userData.role !== 'ADMIN')) {
-            window.location.href = '../index.html';
-            return;
+        // Already staff in session
+        if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+            return true;
         }
         
-        document.getElementById('loginBtnText').textContent = user.name.split(' ')[0];
+        // Check database
+        const dbUser = await supabase
+            .from('users')
+            .select('role')
+            .eq('user_id', userData.user_id)
+            .single();
+        
+        if (!dbUser || (dbUser.role !== 'STAFF' && dbUser.role !== 'ADMIN')) {
+            showAccessDenied('This area is restricted to staff members only.');
+            return false;
+        }
+        
+        // Update stored role
+        userData.role = dbUser.role;
+        if (localStorage.getItem('buildbuddy_user')) {
+            localStorage.setItem('buildbuddy_user', JSON.stringify(userData));
+        } else {
+            sessionStorage.setItem('buildbuddy_user', JSON.stringify(userData));
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('Access check failed:', e);
+        showAccessDenied('An error occurred. Please try again.');
+        return false;
+    }
+}
+
+function showAccessDenied(message) {
+    document.getElementById('loadingContent').style.display = 'none';
+    document.getElementById('accessDeniedContent').style.display = 'block';
+    document.getElementById('accessDeniedMessage').textContent = message;
+}
+
+function showDashboard() {
+    document.getElementById('loadingContent').style.display = 'none';
+    document.getElementById('accessDeniedContent').style.display = 'none';
+    document.getElementById('mainDashboardContent').style.display = 'block';
+}
+
+async function loadStaff() {
+    try {
+        const users = await supabase
+            .from('users')
+            .select('user_id, full_name, email, role');
+        
+        allStaff = Array.isArray(users) 
+            ? users.filter(u => u.role === 'STAFF' || u.role === 'ADMIN')
+            : [];
     } catch (error) {
-        console.error('Error checking access:', error);
-        window.location.href = '../index.html';
+        console.error('Error loading staff:', error);
+        allStaff = [];
     }
 }
 
 async function loadOrders() {
+    const tbody = document.getElementById('ordersTableBody');
+    
     try {
         const orders = await supabase
             .from('service_orders')
-            .select(`
-                *,
-                service:service_id (service_name, service_price),
-                user:user_id (full_name, email, phone)
-            `)
+            .select('*')
             .order('created_at', 'desc');
         
-        allOrders = orders || [];
+        allOrders = Array.isArray(orders) ? orders : [];
+        
+        // Get users
+        const users = await supabase.from('users').select('user_id, full_name, email, phone');
+        const usersMap = {};
+        if (Array.isArray(users)) {
+            users.forEach(u => usersMap[u.user_id] = u);
+        }
+        
+        // Get services
+        const services = await supabase.from('service').select('*');
+        const servicesMap = {};
+        if (Array.isArray(services)) {
+            services.forEach(s => servicesMap[s.service_id] = s);
+        }
+        
+        // Enrich orders
+        allOrders = allOrders.map(order => ({
+            ...order,
+            users: usersMap[order.user_id] || null,
+            service: servicesMap[order.service_id] || null,
+            assigned_staff: usersMap[order.assigned_staff_id] || null
+        }));
+        
         renderOrders();
+        updateStats();
+        
     } catch (error) {
         console.error('Error loading orders:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
+                    <p>Failed to load orders. Please refresh the page.</p>
+                </td>
+            </tr>
+        `;
     }
 }
 
@@ -63,67 +142,62 @@ function renderOrders() {
         : allOrders.filter(o => o.order_status === currentFilter);
     
     if (filteredOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px;">No services scheduled</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
+                    <p>No orders found.</p>
+                </td>
+            </tr>
+        `;
         return;
     }
     
-    tbody.innerHTML = filteredOrders.map(order => `
-        <tr>
-            <td><strong>#${order.order_id}</strong></td>
-            <td>
-                ${order.user?.full_name || 'Guest'}<br>
-                <small style="color: #666;">${order.contact_phone}</small>
-            </td>
-            <td>${order.service?.service_name || 'N/A'}</td>
-            <td>${order.device_model}</td>
-            <td>${formatDate(order.created_at)}</td>
-            <td>
-                <span class="status-badge status-${order.order_status}">${order.order_status}</span>
-            </td>
-            <td>
-                <button class="action-btn btn-update" onclick="showUpdateModal(${order.order_id})">
-                    <i class="fas fa-edit"></i> Update
-                </button>
-                <button class="action-btn" onclick="viewOrderDetails(${order.order_id})" style="background: #f0f0f5;">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = filteredOrders.map(order => {
+        const customerName = order.users?.full_name || 'Guest';
+        const serviceName = order.service?.service_name || 'N/A';
+        const staffName = order.assigned_staff?.full_name || 'Unassigned';
+        const staffClass = order.assigned_staff_id ? 'assigned' : 'unassigned';
+        
+        return `
+            <tr>
+                <td><strong>#${order.order_id}</strong></td>
+                <td>
+                    ${escapeHtml(customerName)}<br>
+                    <small style="color: #666;">${escapeHtml(order.contact_phone || '')}</small>
+                </td>
+                <td>${escapeHtml(serviceName)}</td>
+                <td>${escapeHtml(order.device_model || '')}</td>
+                <td>
+                    <span class="staff-badge ${staffClass}">
+                        ${escapeHtml(staffName)}
+                    </span>
+                </td>
+                <td>${formatDate(order.created_at)}</td>
+                <td>
+                    <span class="status-badge status-${order.order_status}">${(order.order_status || '').replace(/_/g, ' ')}</span>
+                </td>
+                <td>
+                    <button class="action-btn btn-assign" onclick="window.assignStaff(${order.order_id})">
+                        <i class="fas fa-user-plus"></i>
+                    </button>
+                    <button class="action-btn btn-update" onclick="window.updateOrderStatus(${order.order_id}, '${order.order_status}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn" onclick="window.viewOrderDetails(${order.order_id})" style="background: #f0f0f5;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
-async function loadStats() {
-    try {
-        const pending = allOrders.filter(o => o.order_status === 'PENDING').length;
-        const inProgress = allOrders.filter(o => o.order_status === 'IN_PROGRESS').length;
-        const completed = allOrders.filter(o => o.order_status === 'COMPLETED').length;
-        const total = allOrders.length;
-        
-        document.getElementById('statsGrid').innerHTML = `
-            <div class="stat-card">
-                <i class="fas fa-clock"></i>
-                <div class="stat-value">${pending}</div>
-                <div class="stat-label">Pending</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-spinner"></i>
-                <div class="stat-value">${inProgress}</div>
-                <div class="stat-label">In Progress</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-check-circle"></i>
-                <div class="stat-value">${completed}</div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-chart-bar"></i>
-                <div class="stat-value">${total}</div>
-                <div class="stat-label">Total Orders</div>
-            </div>
-        `;
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
+function updateStats() {
+    document.getElementById('pendingCount').textContent = allOrders.filter(o => o.order_status === 'PENDING').length;
+    document.getElementById('confirmedCount').textContent = allOrders.filter(o => o.order_status === 'CONFIRMED').length;
+    document.getElementById('inProgressCount').textContent = allOrders.filter(o => o.order_status === 'IN_PROGRESS').length;
+    document.getElementById('completedCount').textContent = allOrders.filter(o => o.order_status === 'COMPLETED').length;
 }
 
 window.filterOrders = function() {
@@ -131,7 +205,7 @@ window.filterOrders = function() {
     renderOrders();
 };
 
-window.showUpdateModal = function(orderId) {
+window.assignStaff = function(orderId) {
     const order = allOrders.find(o => o.order_id === orderId);
     if (!order) return;
     
@@ -139,59 +213,101 @@ window.showUpdateModal = function(orderId) {
     const body = document.getElementById('updateModalBody');
     
     body.innerHTML = `
-        <div style="margin-bottom: 20px;">
-            <p><strong>Order #${order.order_id}</strong></p>
-            <p>Customer: ${order.user?.full_name || 'Guest'}</p>
-            <p>Current Status: <span class="status-badge status-${order.order_status}">${order.order_status}</span></p>
-        </div>
+        <h4 style="color: #1a1a2e; margin-bottom: 15px;">
+            <i class="fas fa-user-plus"></i> Assign Staff - Order #${order.order_id}
+        </h4>
+        <hr style="margin: 15px 0;">
+        <p><strong>Customer:</strong> ${escapeHtml(order.users?.full_name || 'Guest')}</p>
+        <p><strong>Current Staff:</strong> ${escapeHtml(order.assigned_staff?.full_name || 'Unassigned')}</p>
         
-        <div class="form-group">
-            <label>Update Status:</label>
-            <select id="newStatus" class="filter-select" style="width: 100%;">
-                <option value="PENDING" ${order.order_status === 'PENDING' ? 'selected' : ''}>Pending</option>
-                <option value="CONFIRMED" ${order.order_status === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
-                <option value="IN_PROGRESS" ${order.order_status === 'IN_PROGRESS' ? 'selected' : ''}>In Progress</option>
-                <option value="COMPLETED" ${order.order_status === 'COMPLETED' ? 'selected' : ''}>Completed</option>
-                <option value="CANCELLED" ${order.order_status === 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
-            </select>
-        </div>
+        <select id="staffSelect" style="width:100%;padding:10px;margin:15px 0;border:1px solid #e0e0e0;border-radius:8px;">
+            <option value="">-- Remove Assignment --</option>
+            ${allStaff.map(s => `
+                <option value="${s.user_id}" ${order.assigned_staff_id === s.user_id ? 'selected' : ''}>
+                    ${escapeHtml(s.full_name)} (${escapeHtml(s.email)})
+                </option>
+            `).join('')}
+        </select>
         
-        <div class="form-group">
-            <label>Notes (Optional):</label>
-            <textarea id="updateNotes" rows="3" placeholder="Add notes about this update..."></textarea>
-        </div>
-        
-        <button class="btn-primary" onclick="updateOrderStatus(${order.order_id})" style="width: 100%;">
-            Update Order
+        <button class="btn-primary" onclick="window.confirmStaffAssignment(${order.order_id})" style="width:100%;">
+            <i class="fas fa-check"></i> Confirm Assignment
         </button>
     `;
     
     modal.style.display = 'flex';
 };
 
-window.updateOrderStatus = async function(orderId) {
-    const newStatus = document.getElementById('newStatus').value;
-    const notes = document.getElementById('updateNotes').value;
+window.confirmStaffAssignment = async function(orderId) {
+    const staffId = document.getElementById('staffSelect').value || null;
     
-    try {
-        await supabase
-            .from('service_orders')
-            .update({ 
-                order_status: newStatus,
-                notes: notes || null,
-                updated_at: new Date().toISOString()
-            })
-            .eq('order_id', orderId);
+    await supabase
+        .from('service_orders')
+        .update({ 
+            assigned_staff_id: staffId ? parseInt(staffId) : null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('order_id', orderId);
+    
+    closeUpdateModal();
+    await loadOrders();
+    alert('Staff assigned successfully!');
+};
+
+window.updateOrderStatus = function(orderId, currentStatus) {
+    const order = allOrders.find(o => o.order_id === orderId);
+    if (!order) return;
+    
+    const modal = document.getElementById('updateModal');
+    const body = document.getElementById('updateModalBody');
+    
+    const flows = {
+        'PENDING': ['CONFIRMED', 'CANCELLED'],
+        'CONFIRMED': ['IN_PROGRESS', 'CANCELLED'],
+        'IN_PROGRESS': ['COMPLETED', 'CANCELLED'],
+        'COMPLETED': [],
+        'CANCELLED': []
+    };
+    const statusFlow = flows[currentStatus] || [];
+    
+    body.innerHTML = `
+        <h4 style="color: #1a1a2e; margin-bottom: 15px;">
+            <i class="fas fa-edit"></i> Update Status - Order #${order.order_id}
+        </h4>
+        <hr style="margin: 15px 0;">
+        <p><strong>Current Status:</strong> 
+            <span class="status-badge status-${order.order_status}">${(order.order_status || '').replace(/_/g, ' ')}</span>
+        </p>
         
-        document.getElementById('updateModal').style.display = 'none';
-        await loadOrders();
-        await loadStats();
-        
-        alert('Order updated successfully!');
-    } catch (error) {
-        console.error('Error updating order:', error);
-        alert('Failed to update order');
-    }
+        ${statusFlow.length > 0 ? `
+            <select id="newStatus" style="width:100%;padding:10px;margin:15px 0;border:1px solid #e0e0e0;border-radius:8px;">
+                ${statusFlow.map(s => `<option value="${s}">${s.replace(/_/g, ' ')}</option>`).join('')}
+            </select>
+            <button class="btn-primary" onclick="window.confirmStatusUpdate(${order.order_id})" style="width:100%;">
+                <i class="fas fa-check"></i> Confirm Update
+            </button>
+        ` : `
+            <p style="color: #e65100;">No further status updates available.</p>
+        `}
+    `;
+    
+    modal.style.display = 'flex';
+};
+
+window.confirmStatusUpdate = async function(orderId) {
+    const newStatus = document.getElementById('newStatus').value;
+    if (!newStatus) return;
+    
+    await supabase
+        .from('service_orders')
+        .update({ 
+            order_status: newStatus,
+            updated_at: new Date().toISOString()
+        })
+        .eq('order_id', orderId);
+    
+    closeUpdateModal();
+    await loadOrders();
+    alert('Status updated successfully!');
 };
 
 window.viewOrderDetails = function(orderId) {
@@ -202,35 +318,65 @@ window.viewOrderDetails = function(orderId) {
     const body = document.getElementById('updateModalBody');
     
     body.innerHTML = `
-        <h4>Order Details #${order.order_id}</h4>
+        <h4 style="color: #1a1a2e; margin-bottom: 15px;">
+            <i class="fas fa-clipboard"></i> Order Details #${order.order_id}
+        </h4>
         <hr style="margin: 15px 0;">
-        <p><strong>Customer:</strong> ${order.user?.full_name || 'Guest'}</p>
-        <p><strong>Email:</strong> ${order.user?.email || 'N/A'}</p>
-        <p><strong>Phone:</strong> ${order.contact_phone}</p>
-        <p><strong>Service:</strong> ${order.service?.service_name}</p>
-        <p><strong>Device:</strong> ${order.device_model}</p>
-        <p><strong>Issue:</strong> ${order.device_issue}</p>
-        <p><strong>Address:</strong> ${order.address}</p>
-        <p><strong>Preferred Date:</strong> ${order.preferred_date || 'Not specified'}</p>
-        <p><strong>Preferred Time:</strong> ${order.preferred_time || 'Not specified'}</p>
-        <p><strong>Notes:</strong> ${order.notes || 'None'}</p>
-        <p><strong>Status:</strong> <span class="status-badge status-${order.order_status}">${order.order_status}</span></p>
+        <div style="display: grid; gap: 8px;">
+            <p><strong>Customer:</strong> ${escapeHtml(order.users?.full_name || 'Guest')}</p>
+            <p><strong>Email:</strong> ${escapeHtml(order.users?.email || 'N/A')}</p>
+            <p><strong>Phone:</strong> ${escapeHtml(order.contact_phone || 'N/A')}</p>
+            <p><strong>Service:</strong> ${escapeHtml(order.service?.service_name || 'N/A')}</p>
+            <p><strong>Device:</strong> ${escapeHtml(order.device_model || 'N/A')}</p>
+            <p><strong>Issue:</strong> ${escapeHtml(order.device_issue || 'None')}</p>
+            <p><strong>Address:</strong> ${escapeHtml(order.address || 'N/A')}</p>
+            <p><strong>Date:</strong> ${order.preferred_date || 'Not specified'}</p>
+            <p><strong>Time:</strong> ${order.preferred_time || 'Not specified'}</p>
+            <p><strong>Assigned Staff:</strong> ${escapeHtml(order.assigned_staff?.full_name || 'Unassigned')}</p>
+            <p><strong>Status:</strong> 
+                <span class="status-badge status-${order.order_status}">${(order.order_status || '').replace(/_/g, ' ')}</span>
+            </p>
+            <p><strong>Created:</strong> ${formatDate(order.created_at)}</p>
+        </div>
         <hr style="margin: 15px 0;">
-        <button class="btn-primary" onclick="document.getElementById('updateModal').style.display='none'" style="width: 100%;">
-            Close
+        <button class="btn-primary" onclick="window.closeUpdateModal()" style="width:100%;">
+            <i class="fas fa-times"></i> Close
         </button>
     `;
     
     modal.style.display = 'flex';
 };
 
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+window.closeUpdateModal = function() {
+    document.getElementById('updateModal').style.display = 'none';
+};
+
+function setupEventListeners() {
+    document.getElementById('statusFilter').addEventListener('change', window.filterOrders);
+    
+    document.getElementById('refreshBtn').addEventListener('click', async () => {
+        await loadOrders();
+    });
+    
+    document.querySelector('.close-modal').addEventListener('click', window.closeUpdateModal);
+    
+    window.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('updateModal')) {
+            window.closeUpdateModal();
+        }
+    });
 }
 
-// Close modal
-document.querySelector('.close-modal')?.addEventListener('click', () => {
-    document.getElementById('updateModal').style.display = 'none';
-});
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-MY', { 
+        year: 'numeric', month: 'short', day: 'numeric' 
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
