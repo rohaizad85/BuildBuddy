@@ -3,6 +3,8 @@ import supabase from '../supabase-client.js';
 let allOrders = [];
 let allStaff = [];
 let currentFilter = 'ALL';
+let currentUserRole = null;
+let currentUserId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const hasAccess = await checkStaffAccess();
@@ -25,6 +27,10 @@ async function checkStaffAccess() {
     try {
         const userData = JSON.parse(user);
         
+        // Store user ID and role
+        currentUserId = userData.user_id || userData.id;
+        currentUserRole = userData.role;
+        
         // Already staff in session
         if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
             return true;
@@ -44,6 +50,7 @@ async function checkStaffAccess() {
         
         // Update stored role
         userData.role = dbUser.role;
+        currentUserRole = dbUser.role;
         if (localStorage.getItem('buildbuddy_user')) {
             localStorage.setItem('buildbuddy_user', JSON.stringify(userData));
         } else {
@@ -89,10 +96,21 @@ async function loadOrders() {
     const tbody = document.getElementById('ordersTableBody');
     
     try {
-        const orders = await supabase
-            .from('service_orders')
-            .select('*')
-            .order('created_at', 'desc');
+        let orders;
+        
+        // ADMIN sees all, STAFF sees only assigned
+        if (currentUserRole === 'ADMIN') {
+            orders = await supabase
+                .from('service_orders')
+                .select('*')
+                .order('created_at', 'desc');
+        } else {
+            orders = await supabase
+                .from('service_orders')
+                .select('*')
+                .eq('assigned_staff_id', currentUserId)
+                .order('created_at', 'desc');
+        }
         
         allOrders = Array.isArray(orders) ? orders : [];
         
@@ -146,7 +164,7 @@ function renderOrders() {
             <tr>
                 <td colspan="8" style="text-align: center; padding: 40px;">
                     <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
-                    <p>No orders found.</p>
+                    <p>${currentUserRole === 'STAFF' ? 'No orders assigned to you.' : 'No orders found.'}</p>
                 </td>
             </tr>
         `;
@@ -178,9 +196,11 @@ function renderOrders() {
                     <span class="status-badge status-${order.order_status}">${(order.order_status || '').replace(/_/g, ' ')}</span>
                 </td>
                 <td>
-                    <button class="action-btn btn-assign" onclick="window.assignStaff(${order.order_id})">
-                        <i class="fas fa-user-plus"></i>
-                    </button>
+                    ${currentUserRole === 'ADMIN' ? `
+                        <button class="action-btn btn-assign" onclick="window.assignStaff(${order.order_id})">
+                            <i class="fas fa-user-plus"></i>
+                        </button>
+                    ` : ''}
                     <button class="action-btn btn-update" onclick="window.updateOrderStatus(${order.order_id}, '${order.order_status}')">
                         <i class="fas fa-edit"></i>
                     </button>
