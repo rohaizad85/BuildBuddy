@@ -241,8 +241,11 @@
             <nav class="nav">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="builder.html" class="nav-link">PC Builder</a>
-                <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
-                <a href="service.html" class="nav-link active">Services</a>
+                <a href="prebuilt.html" class="nav-link active">Pre-Built PCs</a>
+                <a href="service.html" class="nav-link">Services</a>
+                <a href="staff/staff-dashboard.html" class="nav-link" id="staffNavLink" style="display: none;">
+                    <i class="fas fa-cog"></i> Staff
+                </a>
             </nav>
             <div class="header-actions">
                 <button class="cart-btn" onclick="window.location.href='cart.html'">
@@ -349,6 +352,21 @@
             </div>
         </div>
     </footer>
+
+    <script>
+        (function() {
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+                        const staffLink = document.getElementById('staffNavLink');
+                        if (staffLink) staffLink.style.display = 'inline-block';
+                    }
+                } catch (e) {}
+            }
+        })();
+    </script>
 
     <script type="module" src="js/service.js"></script>
 </body>

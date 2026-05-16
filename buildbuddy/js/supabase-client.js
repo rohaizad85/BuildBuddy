@@ -232,10 +232,10 @@ class SupabaseQueryBuilder {
     }
 
     async executeDelete() {
-        if (this.filters.length === 0) {
-            throw new Error('DELETE requires a WHERE clause. Use .eq() before .delete()');
-        }
-        
+    if (this.filters.length === 0) {
+        throw new Error('DELETE requires a WHERE clause. Use .eq() before .delete()');
+    }
+    
         const url = this.buildFilterUrl();
         
         const response = await fetch(url, {
@@ -243,12 +243,19 @@ class SupabaseQueryBuilder {
             headers: this.client.headers
         });
         
+        // 204 No Content = successful delete with no body
+        if (response.status === 204) {
+            return { success: true };
+        }
+        
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        return await response.json();
+        // Only parse JSON if there's content
+        const text = await response.text();
+        return text ? JSON.parse(text) : { success: true };
     }
 
     then(resolve, reject) {

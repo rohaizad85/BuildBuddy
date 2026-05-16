@@ -300,6 +300,21 @@
         loadFeaturedPrebuilts();
     });
 </script>
+    <script>
+        // Show staff link for STAFF/ADMIN users
+        (function() {
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+                        const staffLink = document.getElementById('staffNavLink');
+                        if (staffLink) staffLink.style.display = 'inline-block';
+                    }
+                } catch (e) {}
+            }
+        })();
+    </script>
 
     <script type="module" src="js/script.js"></script>
 </body>

@@ -987,3 +987,31 @@ input:checked + .slider:before {
 .product-stock i {
     margin-right: 5px;
 }
+
+.ai-status {
+    font-size: 14px;
+    line-height: 1.5;
+}
+.ai-status.checking {
+    background: #fff3e0 !important;
+    color: #e65100;
+}
+.ai-status.compatible {
+    background: #e8f5e9 !important;
+    color: #2e7d32;
+}
+.ai-status.incompatible {
+    background: #ffebee !important;
+    color: #c62828;
+}
+.ai-status.error {
+    background: #fff3e0 !important;
+    color: #e65100;
+}
+.severity-critical {
+    color: #c62828;
+    font-weight: 600;
+}
+.severity-warning {
+    color: #e65100;
+}
