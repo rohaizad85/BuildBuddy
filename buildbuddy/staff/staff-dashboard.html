@@ -200,6 +200,15 @@
                             <option value="COMPLETED">Completed</option>
                             <option value="CANCELLED">Cancelled</option>
                         </select>
+                        <select class="filter-select" id="sortBy" onchange="window.sortOrdersBy(this.value)">
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="name-az">Customer A-Z</option>
+                            <option value="name-za">Customer Z-A</option>
+                            <option value="id-asc">ID ↑</option>
+                            <option value="id-desc">ID ↓</option>
+                            <option value="due-date">Closest Due Date</option>
+                        </select>
                         <button class="btn-primary" id="refreshBtn" style="margin-left: auto;">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>

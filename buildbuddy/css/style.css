@@ -1015,3 +1015,8 @@ input:checked + .slider:before {
 .severity-warning {
     color: #e65100;
 }
+
+.clickable-row:hover {
+    background: #f0f8ff !important;
+    transition: background 0.2s;
+}

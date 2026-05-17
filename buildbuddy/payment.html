@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - BuildBuddy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .checkout-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+        }
+        .checkout-header h1 { font-size: 36px; margin-bottom: 10px; }
+        .checkout-header p { color: #ccc; font-size: 16px; }
+        
+        .checkout-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .checkout-form {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }
+        
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .form-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title i { color: #00d4ff; }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-row.full { grid-template-columns: 1fr; }
+        
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 600;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+        }
+        .form-group .error-msg {
+            color: #f44336;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+        
+        .payment-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .payment-method {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .payment-method:hover { border-color: #00d4ff; }
+        .payment-method.selected {
+            border-color: #00d4ff;
+            background: #f0fdff;
+        }
+        .payment-method i { font-size: 32px; color: #666; margin-bottom: 10px; display: block; }
+        .payment-method.selected i { color: #00d4ff; }
+        .payment-method h4 { color: #1a1a2e; margin-bottom: 5px; font-size: 15px; }
+        .payment-method p { color: #666; font-size: 12px; }
+        
+        .order-summary {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+        .order-summary h3 { color: #1a1a2e; margin-bottom: 20px; }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .summary-item.total {
+            border-top: 2px solid #e0e0e0;
+            margin-top: 10px;
+            padding-top: 20px;
+            font-weight: 700;
+            font-size: 18px;
+            color: #1a1a2e;
+        }
+        .summary-item.discount { color: #4CAF50; }
+        
+        .voucher-section {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .voucher-section input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .voucher-section button {
+            padding: 10px 15px;
+            background: #f0f0f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .voucher-section button:hover { background: #00d4ff; color: #1a1a2e; border-color: #00d4ff; }
+        .voucher-msg { font-size: 12px; margin-top: 5px; }
+        .voucher-msg.success { color: #4CAF50; }
+        .voucher-msg.error { color: #f44336; }
+        
+        .place-order-btn {
+            width: 100%;
+            padding: 16px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        .place-order-btn:hover:not(:disabled) {
+            background: #00b8e6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,212,255,0.3);
+        }
+        .place-order-btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .success-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .success-modal {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .success-modal .icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+        }
+        .success-modal .icon.cash { color: #4CAF50; }
+        .success-modal .icon.online { color: #2196F3; }
+        .success-modal h2 { color: #1a1a2e; margin-bottom: 10px; }
+        .success-modal p { color: #666; margin-bottom: 20px; line-height: 1.6; }
+        .success-modal .amount { font-size: 28px; font-weight: 700; color: #1a1a2e; margin: 10px 0; }
+        
+        .loading-overlay {
+            text-align: center;
+            padding: 60px;
+        }
+        
+        @media (max-width: 768px) {
+            .checkout-container { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+            .payment-methods { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <i class="fas fa-microchip"></i>
+                <h1>BuildBuddy</h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="builder.html" class="nav-link">PC Builder</a>
+                <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
+                <a href="service.html" class="nav-link">Services</a>
+                <a href="staff/staff-dashboard.html" class="nav-link" id="staffNavLink" style="display: none;">
+                    <i class="fas fa-cog"></i> Staff
+                </a>
+            </nav>
+            <div class="header-actions">
+                <button class="cart-btn" onclick="window.location.href='cart.html'">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <button class="login-btn" id="loginBtn">
+                    <i class="fas fa-user"></i>
+                    <span id="loginBtnText">Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="checkout-header">
+            <div class="container">
+                <a href="cart.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Cart</a>
+                <h1><i class="fas fa-lock"></i> Checkout</h1>
+                <p>Complete your order securely</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <div id="checkoutContainer">
+                <div class="loading-overlay">
+                    <p>Loading checkout...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section"><h4>BuildBuddy</h4><p>Your trusted PC building companion.</p></div>
+                <div class="footer-section"><h4>Quick Links</h4><a href="index.html">Home</a><a href="builder.html">PC Builder</a><a href="prebuilt.html">Pre-Built PCs</a></div>
+                <div class="footer-section"><h4>Contact</h4><p><i class="fas fa-phone"></i> +60 12-345 6789</p><p><i class="fas fa-envelope"></i> support@buildbuddy.my</p></div>
+            </div>
+            <div class="footer-bottom"><p>&copy; 2024 BuildBuddy. All rights reserved.</p></div>
+        </div>
+    </footer>
+
+    <script>
+        (function() {
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+                        const staffLink = document.getElementById('staffNavLink');
+                        if (staffLink) staffLink.style.display = 'inline-block';
+                    }
+                    const loginBtnText = document.getElementById('loginBtnText');
+                    if (loginBtnText) loginBtnText.textContent = (userData.full_name || 'User').split(' ')[0];
+                } catch (e) {}
+            }
+            const count = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]').length;
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = count);
+        })();
+    </script>
+
+    <script type="module" src="js/payment.js"></script>
+</body>
+</html>

@@ -6,6 +6,47 @@
     <title>PC Builder - BuildBuddy</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .category-dropdown { position: relative; margin-bottom: 20px; }
+        .category-toggle {
+            width: 100%; padding: 14px 18px; background: #1a1a2e; color: white;
+            border: none; border-radius: 12px; font-size: 15px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+            transition: all 0.3s; box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        .category-toggle:hover { background: #16213e; }
+        .category-toggle i { transition: transform 0.3s; }
+        .category-toggle.open i { transform: rotate(180deg); }
+        
+        .category-menu {
+            position: absolute; top: 100%; left: 0; right: 0; background: white;
+            border-radius: 12px; margin-top: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            z-index: 100; overflow: hidden; max-height: 0; opacity: 0; transition: all 0.3s ease;
+        }
+        .category-menu.show { max-height: 500px; opacity: 1; }
+        .category-item {
+            padding: 13px 20px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 12px; font-size: 14px;
+            font-weight: 500; color: #555; border-bottom: 1px solid #f0f0f5;
+        }
+        .category-item:last-child { border-bottom: none; }
+        .category-item:hover { background: #f0fdff; color: #1a1a2e; }
+        .category-item.active { background: #e0f7fa; color: #00a8cc; font-weight: 600; }
+        .category-item i { width: 20px; text-align: center; font-size: 14px; }
+        
+        .sort-dropdown { position: relative; margin-left: auto; }
+        .sort-menu {
+            display: none; position: absolute; top: 100%; right: 0; background: white;
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 50;
+            min-width: 200px; margin-top: 5px; overflow: hidden;
+        }
+        .sort-option {
+            padding: 10px 16px; cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid #f0f0f5;
+        }
+        .sort-option:hover { background: #f0fdff; }
+        .sort-option.active { background: #e0f7fa; color: #00a8cc; font-weight: 600; }
+    </style>
 </head>
 <body>
     <header class="header">
@@ -16,8 +57,8 @@
             </div>
             <nav class="nav">
                 <a href="index.html" class="nav-link">Home</a>
-                <a href="builder.html" class="nav-link">PC Builder</a>
-                <a href="prebuilt.html" class="nav-link active">Pre-Built PCs</a>
+                <a href="builder.html" class="nav-link active">PC Builder</a>
+                <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
                 <a href="service.html" class="nav-link">Services</a>
                 <a href="staff/staff-dashboard.html" class="nav-link" id="staffNavLink" style="display: none;">
                     <i class="fas fa-cog"></i> Staff
@@ -29,8 +70,8 @@
                     <span class="cart-count">0</span>
                 </button>
                 <button class="login-btn" id="loginBtn">
-                <i class="fas fa-user"></i>
-                <span id="loginBtnText">Login</span>
+                    <i class="fas fa-user"></i>
+                    <span id="loginBtnText">Login</span>
                 </button>
             </div>
         </div>
@@ -41,46 +82,60 @@
             <div class="container">
                 <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
                 <h2><i class="fas fa-cogs"></i> Custom PC Builder</h2>
-                <p>Select components - Our AI will check compatibility in real-time</p>
+                <p>Select components - Our AI will check compatibility</p>
             </div>
         </div>
 
         <div class="container">
             <div class="main-layout">
                 <aside class="sidebar">
-                    <h3>Categories</h3>
-                    <ul class="category-list">
-                        <li class="category-item active" data-category="all">All Products</li>
-                        <li class="category-item" data-category="cpu">CPU</li>
-                        <li class="category-item" data-category="motherboard">Motherboard</li>
-                        <li class="category-item" data-category="ram">RAM</li>
-                        <li class="category-item" data-category="gpu">GPU</li>
-                    </ul>
+                    <div class="category-dropdown">
+                        <button class="category-toggle" onclick="toggleCategories()">
+                            <span><i class="fas fa-th-large"></i> Categories</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="category-menu" id="categoryMenu">
+                            <div class="category-item active" data-category="all" onclick="selectCategory('all', this)"><i class="fas fa-border-all"></i> All Products</div>
+                            <div class="category-item" data-category="cpu" onclick="selectCategory('cpu', this)"><i class="fas fa-microchip"></i> CPU</div>
+                            <div class="category-item" data-category="motherboard" onclick="selectCategory('motherboard', this)"><i class="fas fa-th"></i> Motherboard</div>
+                            <div class="category-item" data-category="ram" onclick="selectCategory('ram', this)"><i class="fas fa-memory"></i> RAM</div>
+                            <div class="category-item" data-category="gpu" onclick="selectCategory('gpu', this)"><i class="fas fa-tv"></i> GPU</div>
+                            <div class="category-item" data-category="psu" onclick="selectCategory('psu', this)"><i class="fas fa-plug"></i> PSU</div>
+                            <div class="category-item" data-category="storage" onclick="selectCategory('storage', this)"><i class="fas fa-hdd"></i> Storage</div>
+                            <div class="category-item" data-category="cooler" onclick="selectCategory('cooler', this)"><i class="fas fa-fan"></i> Cooler</div>
+                        </div>
+                    </div>
 
                     <div class="build-summary">
                         <h3>Your Build</h3>
-                        <div id="buildSummaryList">
-                            <p class="empty-build">No components selected</p>
-                        </div>
-                        <div class="build-total">
-                            <span>Total:</span>
-                            <span id="buildTotal">RM 0</span>
-                        </div>
-                        <button class="btn-primary btn-full" id="completeBuildBtn">
-                            <i class="fas fa-check"></i> Complete Build
-                        </button>
+                        <div id="buildSummaryList"><p class="empty-build">No components selected</p></div>
+                        <div class="build-total"><span>Total:</span><span id="buildTotal">RM 0</span></div>
+                        <button class="btn-primary btn-full" id="completeBuildBtn"><i class="fas fa-check"></i> Complete Build</button>
                     </div>
                 </aside>
 
                 <section class="products-section">
                     <div class="section-header">
                         <h2>Select Components</h2>
-                        <div class="ai-toggle">
-                            <label class="switch">
-                                <input type="checkbox" id="compatibilityMode" checked>
-                                <span class="slider"></span>
-                            </label>
-                            <span><i class="fas fa-brain"></i> AI Compatibility</span>
+                        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+                            <button class="btn-primary" id="aiCheckBtn" onclick="window.runAICompatibility()" style="padding:8px 16px;font-size:13px;">
+                                <i class="fas fa-robot"></i> AI Check
+                            </button>
+                            <div class="sort-dropdown">
+                                <button class="btn-outline" onclick="toggleSortDropdown()" style="padding:8px 14px;font-size:13px;">
+                                    <i class="fas fa-sort"></i> Sort
+                                </button>
+                                <div class="sort-menu" id="sortDropdown">
+                                    <div class="sort-option active" data-sort="default" onclick="window.setSort('default');toggleSortDropdown();">🔄 Default</div>
+                                    <div class="sort-option" data-sort="name-az" onclick="window.setSort('name-az');toggleSortDropdown();">🔤 Name A-Z</div>
+                                    <div class="sort-option" data-sort="name-za" onclick="window.setSort('name-za');toggleSortDropdown();">🔤 Name Z-A</div>
+                                    <div class="sort-option" data-sort="price-low" onclick="window.setSort('price-low');toggleSortDropdown();">💰 Price: Low-High</div>
+                                    <div class="sort-option" data-sort="price-high" onclick="window.setSort('price-high');toggleSortDropdown();">💰 Price: High-Low</div>
+                                    <div class="sort-option" data-sort="stock-high" onclick="window.setSort('stock-high');toggleSortDropdown();">📦 Stock: Highest</div>
+                                    <div class="sort-option" data-sort="stock-low" onclick="window.setSort('stock-low');toggleSortDropdown();">📦 Stock: Lowest</div>
+                                    <div class="sort-option" data-sort="brand-az" onclick="window.setSort('brand-az');toggleSortDropdown();">🏷️ Brand A-Z</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -89,17 +144,11 @@
                         <span id="selectedPartsDisplay">Start by selecting a CPU or Motherboard</span>
                     </div>
 
-                    <div class="products-grid" id="productsGrid">
-                    </div>
+                    <div class="products-grid" id="productsGrid"></div>
                     
-                    <div class="ai-compatibility-panel" style="margin-top: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-                        <h3 style="margin-bottom: 15px;">
-                            <i class="fas fa-robot" style="color: #00d4ff;"></i> AI Compatibility Analysis
-                        </h3>
-                        <div id="compatibilityStatus" class="ai-status" style="padding: 15px; border-radius: 8px; background: #f8f9fc;">
-                            <i class="fas fa-info-circle"></i> Select components to check compatibility
-                        </div>
-                        <div id="aiDetails" style="margin-top: 15px;"></div>
+                    <div id="aiResultPanel" style="display:none;margin-top:20px;padding:20px;background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.05);text-align:left;">
+                        <div id="compatibilityStatus" class="ai-status" style="padding:15px;border-radius:8px;background:#f8f9fc;"></div>
+                        <div id="aiDetails" style="margin-top:15px;"></div>
                     </div>
                 </section>
             </div>
@@ -109,63 +158,65 @@
     <div class="modal" id="compatibilityModal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
-            <div class="modal-header">
-                <i class="fas fa-robot"></i>
-                <h3>AI Compatibility Check</h3>
-            </div>
-            <div class="modal-body" id="modalMessage">
-            </div>
+            <div class="modal-header"><i class="fas fa-robot"></i><h3>AI Compatibility Check</h3></div>
+            <div class="modal-body" id="modalMessage"></div>
         </div>
     </div>
 
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
-                <div class="footer-section">
-                    <h4>BuildBuddy</h4>
-                    <p>Your trusted PC building companion since 2024.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Quick Links</h4>
-                    <a href="index.html">Home</a>
-                    <a href="builder.html">PC Builder</a>
-                    <a href="prebuilt.html">Pre-Built PCs</a>
-                    <a href="service.html">Services</a>
-                </div>
-                <div class="footer-section">
-                    <h4>Contact</h4>
-                    <p><i class="fas fa-phone"></i> +60 12-345 6789</p>
-                    <p><i class="fas fa-envelope"></i> support@buildbuddy.my</p>
-                </div>
+                <div class="footer-section"><h4>BuildBuddy</h4><p>Your trusted PC building companion since 2024.</p></div>
+                <div class="footer-section"><h4>Quick Links</h4><a href="index.html">Home</a><a href="builder.html">PC Builder</a><a href="prebuilt.html">Pre-Built PCs</a><a href="service.html">Services</a></div>
+                <div class="footer-section"><h4>Contact</h4><p><i class="fas fa-phone"></i> +60 12-345 6789</p><p><i class="fas fa-envelope"></i> support@buildbuddy.my</p></div>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
-            </div>
+            <div class="footer-bottom"><p>&copy; 2024 BuildBuddy. All rights reserved.</p></div>
         </div>
     </footer>
 
-    <script type="module">
-    import { initCart } from './js/cart-utils.js';
-    
-    document.addEventListener('DOMContentLoaded', async () => {
-        await initCart();
-    });
-    </script>
-
     <script>
-    
+        function toggleCategories() {
+            document.getElementById('categoryMenu').classList.toggle('show');
+            document.querySelector('.category-toggle').classList.toggle('open');
+        }
+        function selectCategory(category, el) {
+            document.querySelectorAll('.category-item').forEach(e => e.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('categoryMenu').classList.remove('show');
+            document.querySelector('.category-toggle').classList.remove('open');
+            window.selectBuilderCategory(category);
+        }
+        function toggleSortDropdown() {
+            const d = document.getElementById('sortDropdown');
+            d.style.display = d.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', function(e) {
+            const dd = document.querySelector('.category-dropdown');
+            const sd = document.getElementById('sortDropdown');
+            if (dd && !dd.contains(e.target)) {
+                document.getElementById('categoryMenu').classList.remove('show');
+                document.querySelector('.category-toggle').classList.remove('open');
+            }
+            if (sd && !e.target.closest('.sort-dropdown') && sd.style.display === 'block') {
+                sd.style.display = 'none';
+            }
+        });
         (function() {
             const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
             if (user) {
                 try {
                     const userData = JSON.parse(user);
                     if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
-                        const staffLink = document.getElementById('staffNavLink');
-                        if (staffLink) staffLink.style.display = 'inline-block';
+                        document.getElementById('staffNavLink').style.display = 'inline-block';
                     }
                 } catch (e) {}
             }
         })();
+    </script>
+
+    <script type="module">
+    import { initCart } from './js/cart-utils.js';
+    document.addEventListener('DOMContentLoaded', async () => { await initCart(); });
     </script>
 
     <script type="module" src="js/script.js"></script>

@@ -156,6 +156,10 @@ ${parts.map(p => `- ${p.category.toUpperCase()}: ${p.name} (${p.brand || ''})`).
     const ram = parts.find(p => p.category === 'ram' || p.category === 'RAM');
     const gpu = parts.find(p => p.category === 'gpu' || p.category === 'GPU');
     
+    // Define these at the top so they're accessible everywhere
+    const cpuBrand = (cpu?.brand || '').toLowerCase();
+    const moboBrand = (mobo?.brand || '').toLowerCase();
+    
     const compatibility = [];
     const issues = [];
     
@@ -168,8 +172,6 @@ ${parts.map(p => `- ${p.category.toUpperCase()}: ${p.name} (${p.brand || ''})`).
     
     // CPU + Motherboard
     if (cpu && mobo) {
-        const cpuBrand = (cpu.brand || '').toLowerCase();
-        const moboBrand = (mobo.brand || '').toLowerCase();
         if (cpuBrand.includes('intel') && moboBrand.includes('amd')) {
             compatibility.push({ parts: `${cpu.name} + ${mobo.name}`, status: 'incompatible', detail: 'Intel CPU needs Intel-compatible motherboard' });
             issues.push({ part: cpu.name, problem: 'CPU/Motherboard mismatch', severity: 'critical' });
@@ -192,7 +194,7 @@ ${parts.map(p => `- ${p.category.toUpperCase()}: ${p.name} (${p.brand || ''})`).
     }
     
     const suggestions = [];
-    if (cpu && gpu && cpuBrand?.includes('intel') && gpu.name?.toLowerCase().includes('4090')) {
+    if (cpu && gpu && cpuBrand.includes('intel') && gpu.name?.toLowerCase().includes('4090')) {
         suggestions.push('High-end GPU - ensure adequate cooling and PSU');
     }
     if (parts.length < 4) suggestions.push('Add RAM and storage to complete your build');
@@ -207,7 +209,7 @@ ${parts.map(p => `- ${p.category.toUpperCase()}: ${p.name} (${p.brand || ''})`).
         suggestions,
         bottlenecks: [],
         estimatedWattage: 500
-    };
+        };
     }
 
     getPartRole(category) {

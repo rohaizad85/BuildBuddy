@@ -1,18 +1,20 @@
 import dataService from './data-service.js';
 import { getCartCount, updateCartCountDisplay, addToCart as addToCartUtil } from './cart-utils.js';
-import geminiCompat from './services/gemini-compat.js';
 
 let selectedParts = {
     cpu: null,
     motherboard: null,
     ram: null,
-    gpu: null
+    gpu: null,
+    psu: null,
+    storage: null,
+    cooler: null
 };
 
 let inventoryData = [];
 let servicesData = [];
 let compatibilityMode = true;
-let buildCompleted = false; // Track if build was already completed
+let buildCompleted = false;
 
 const isBuilderPage = window.location.pathname.includes('builder.html');
 
@@ -90,9 +92,11 @@ function renderProducts(category = 'all') {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
     
-    const filteredProducts = category === 'all' 
+    let filteredProducts = category === 'all' 
         ? inventoryData 
         : inventoryData.filter(p => p.i_category === category);
+
+    filteredProducts = sortProducts(filteredProducts);
     
     productsGrid.innerHTML = filteredProducts.map(product => {
         const isSelected = selectedParts[product.i_category] === product.i_id;
@@ -131,7 +135,6 @@ function getIconForCategory(category) {
     return icons[category] || 'box';
 }
 
-// NEW: Show product detail modal
 window.showProductDetail = function(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
@@ -152,13 +155,11 @@ window.showProductDetail = function(productId) {
                 <p><strong>Brand:</strong> ${product.i_brand || 'N/A'}</p>
                 <p><strong>Price:</strong> RM ${product.i_price}</p>
                 <p><strong>Stock:</strong> ${product.i_quantity} units</p>
-                ${product.i_specs ? `<p><strong>Specs:</strong> ${product.i_specs}</p>` : ''}
-                ${product.i_description ? `<p><strong>Description:</strong> ${product.i_description}</p>` : ''}
             </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button class="btn-select ${isSelected ? 'selected-btn' : ''}" onclick="window.selectForBuild(${product.i_id})" style="flex: 1;">
                     <i class="fas fa-${isSelected ? 'check-circle' : 'plus-circle'}"></i> 
-                    ${isSelected ? 'Selected for Build' : 'Select for Build'}
+                    ${isSelected ? 'Selected' : 'Select for Build'}
                 </button>
                 <button class="btn-add" onclick="window.addToCart(${product.i_id})" style="flex: 1;">
                     <i class="fas fa-cart-plus"></i> Add to Cart
@@ -181,9 +182,7 @@ function renderServices() {
             <h4>${service.service_name}</h4>
             <p>${service.service_duration || 'Contact for duration'}</p>
             <div class="service-price">RM ${service.service_price}</div>
-            <button class="btn-book" onclick="window.bookService(${service.service_id})">
-                Book Now
-            </button>
+            <button class="btn-book" onclick="window.bookService(${service.service_id})">Book Now</button>
         </div>
     `).join('');
 }
@@ -200,10 +199,9 @@ async function selectForBuild(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
     
-    // If already selected, deselect it
     if (selectedParts[product.i_category] === productId) {
         selectedParts[product.i_category] = null;
-        buildCompleted = false; // Reset
+        buildCompleted = false;
         resetCompleteButton();
         updateSelectedPartsDisplay();
         updateBuildSummary();
@@ -216,14 +214,13 @@ async function selectForBuild(productId) {
     }
     
     selectedParts[product.i_category] = productId;
-    buildCompleted = false; // Reset when build changes
+    buildCompleted = false;
     resetCompleteButton();
     updateSelectedPartsDisplay();
     updateBuildSummary();
     renderProducts(getCurrentCategory());
 }
 
-// Reset the complete build button
 function resetCompleteButton() {
     const btn = document.getElementById('completeBuildBtn');
     if (btn) {
@@ -424,7 +421,6 @@ function setupBuilderListeners() {
                 return;
             }
             
-            // Add all selected build parts to cart
             for (const category in selectedParts) {
                 if (selectedParts[category]) {
                     await addToCart(selectedParts[category]);
@@ -464,28 +460,43 @@ function setupModalListeners() {
     });
 }
 
-// Expose functions globally
-window.addToCart = addToCart;
-window.selectForBuild = selectForBuild;
-window.bookService = bookService;
-window.showProductDetail = window.showProductDetail;
+function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff9800') {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+    
+    const popup = document.createElement('div');
+    popup.style.cssText = 'background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:slideUp 0.3s ease;';
+    
+    popup.innerHTML = `
+        <i class="fas fa-${icon}" style="font-size:48px;color:${color};margin-bottom:15px;display:block;"></i>
+        <h3 style="color:#1a1a2e;margin-bottom:8px;">${title}</h3>
+        <p style="color:#666;margin-bottom:20px;line-height:1.5;">${message}</p>
+        <button id="popupCloseBtn" style="padding:12px 40px;background:${color};color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;transition:all 0.2s;">
+            Got it
+        </button>
+    `;
+    
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    
+    const close = () => overlay.remove();
+    document.getElementById('popupCloseBtn').onclick = close;
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    
+    // Add animations if not already present
+    if (!document.getElementById('popupStyles')) {
+        const style = document.createElement('style');
+        style.id = 'popupStyles';
+        style.textContent = `
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        `;
+        document.head.appendChild(style);
+    }
+}
 
-// ===== AI COMPATIBILITY CHECK =====
-const _originalSelectForBuild = selectForBuild;
-selectForBuild = async function(productId) {
-    await _originalSelectForBuild(productId);
-    // Small delay to ensure selectedParts is updated
-    setTimeout(() => runAI(), 100);
-};
-window.selectForBuild = selectForBuild;
-
-const _originalRemoveFromBuild = window.removeFromBuild;
-window.removeFromBuild = function(category) {
-    _originalRemoveFromBuild(category);
-    setTimeout(() => runAI(), 100);
-};
-
-async function runAI() {
+// ===== AI COMPATIBILITY CHECK (BUTTON TRIGGERED) =====
+window.runAICompatibility = async function() {
     const parts = [];
     for (const cat in selectedParts) {
         if (selectedParts[cat]) {
@@ -493,9 +504,201 @@ async function runAI() {
             if (p) parts.push({ category: cat, name: p.i_name, brand: p.i_brand || '' });
         }
     }
-    console.log('AI check - selectedParts:', JSON.stringify(selectedParts));
-    console.log('AI check - parts found:', parts.length, parts);
-    if (parts.length >= 2) {
-        await geminiCompat.checkCompatibility(parts);
+    
+    // Error handling with sleek popups
+    if (parts.length === 0) {
+        showPopup(
+            'No Components Selected',
+            'Please select at least a <strong>CPU</strong> and <strong>Motherboard</strong> to run the compatibility check.',
+            'robot',
+            '#2196F3'
+        );
+        return;
+    }
+    
+    if (parts.length === 1) {
+        const selected = parts[0];
+        showPopup(
+            'Need More Components',
+            `You've only selected <strong>${selected.name}</strong>. Please pick at least a <strong>CPU</strong> and <strong>Motherboard</strong> for a meaningful compatibility check.`,
+            'puzzle-piece',
+            '#ff9800'
+        );
+        return;
+    }
+    
+    const hasCPU = parts.find(p => p.category === 'cpu');
+    const hasMobo = parts.find(p => p.category === 'motherboard');
+    
+    if (!hasCPU || !hasMobo) {
+        const missing = [];
+        if (!hasCPU) missing.push('<strong>CPU</strong>');
+        if (!hasMobo) missing.push('<strong>Motherboard</strong>');
+        showPopup(
+            'Missing Essential Parts',
+            `For a proper compatibility check, please also select: ${missing.join(' and ')}.`,
+            'exclamation-circle',
+            '#f44336'
+        );
+        return;
+    }
+    
+    // Show panel
+    const panel = document.getElementById('aiResultPanel');
+    const statusEl = document.getElementById('compatibilityStatus');
+    const detailsEl = document.getElementById('aiDetails');
+    
+    panel.style.display = 'block';
+    statusEl.className = 'ai-status checking';
+    statusEl.innerHTML = '<i class="fas fa-robot fa-spin"></i> AI analyzing your build...';
+    detailsEl.innerHTML = '';
+    panel.scrollIntoView({ behavior: 'smooth' });
+    
+    const btn = document.getElementById('aiCheckBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+    
+    try {
+        const response = await fetch('http://localhost:3000/api/gemini-compat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: buildAIPrompt(parts) })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        displayAIResults(result);
+        
+    } catch (error) {
+        console.error('AI check failed:', error);
+        const result = localCompatCheck(parts);
+        displayAIResults(result);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-robot"></i> Check AI Compatibility';
+    }
+};
+
+function buildAIPrompt(parts) {
+    return `PC compatibility check:\n${parts.map(p => `- ${p.category.toUpperCase()}: ${p.name} (${p.brand})`).join('\n')}\n\nReturn JSON: {"compatible":bool,"summary":"","compatibility":[{"parts":"","status":"compatible/warning/incompatible","detail":""}],"partDetails":[{"name":"","category":"","role":"","note":""}],"suggestions":[],"estimatedWattage":500}`;
+}
+
+function displayAIResults(result) {
+    const statusEl = document.getElementById('compatibilityStatus');
+    const detailsEl = document.getElementById('aiDetails');
+    
+    if (result.compatible) {
+        statusEl.className = 'ai-status compatible';
+        statusEl.innerHTML = `<i class="fas fa-check-circle" style="color:#4CAF50;font-size:20px;"></i> <strong>${result.summary || 'Build Compatible'}</strong> ✅`;
+    } else {
+        statusEl.className = 'ai-status incompatible';
+        statusEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f44336;font-size:20px;"></i> <strong>${result.summary || 'Issues Found'}</strong> ❌`;
+    }
+    
+    let html = '';
+    
+    if (result.partDetails?.length) {
+        result.partDetails.forEach(p => {
+            html += `<div style="margin:6px 0;padding:10px;background:#f8f9fc;border-radius:6px;border-left:3px solid #00d4ff;">
+                <strong>${p.name}</strong> <span style="color:#888;font-size:11px;">(${p.category})</span>
+                <div style="font-size:12px;color:#555;">${p.role || ''}</div></div>`;
+        });
+    }
+    
+    if (result.compatibility?.length) {
+        result.compatibility.forEach(c => {
+            const icon = c.status === 'compatible' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
+            const bg = c.status === 'compatible' ? '#e8f5e9' : c.status === 'warning' ? '#fff3e0' : '#ffebee';
+            html += `<div style="margin:4px 0;padding:6px;background:${bg};border-radius:4px;font-size:12px;">${icon} <strong>${c.parts}:</strong> ${c.detail}</div>`;
+        });
+    }
+    
+    if (result.suggestions?.length) {
+        html += `<div style="margin-top:8px;padding:8px;background:#e3f2fd;border-radius:6px;font-size:12px;"><strong>💡</strong> ${result.suggestions.join(' | ')}</div>`;
+    }
+    
+    if (result.estimatedWattage) {
+        html += `<div style="margin-top:6px;text-align:center;font-size:12px;color:#666;">⚡ ~${result.estimatedWattage}W</div>`;
+    }
+    
+    detailsEl.innerHTML = html || '<p style="color:#666;font-size:13px;">No details available.</p>';
+}
+
+function localCompatCheck(parts) {
+    const cpu = parts.find(p => p.category === 'cpu' || p.category === 'CPU');
+    const mobo = parts.find(p => p.category === 'motherboard' || p.category === 'MOTHERBOARD');
+    const ram = parts.find(p => p.category === 'ram' || p.category === 'RAM');
+    const gpu = parts.find(p => p.category === 'gpu' || p.category === 'GPU');
+    
+    const cpuBrand = (cpu?.brand || '').toLowerCase();
+    const moboBrand = (mobo?.brand || '').toLowerCase();
+    const compatibility = [];
+    const issues = [];
+    
+    const partDetails = parts.map(p => ({
+        name: p.name, category: (p.category || '').toUpperCase(),
+        role: getPartRole(p.category), note: ''
+    }));
+    
+    if (cpu && mobo) {
+        if (cpuBrand.includes('intel') && moboBrand.includes('amd')) {
+            compatibility.push({ parts: `${cpu.name} + ${mobo.name}`, status: 'incompatible', detail: 'Intel CPU needs Intel motherboard' });
+            issues.push({ part: cpu.name, problem: 'CPU/Mobo mismatch', severity: 'critical' });
+        } else if (cpuBrand.includes('amd') && moboBrand.includes('intel')) {
+            compatibility.push({ parts: `${cpu.name} + ${mobo.name}`, status: 'incompatible', detail: 'AMD CPU needs AMD motherboard' });
+            issues.push({ part: cpu.name, problem: 'CPU/Mobo mismatch', severity: 'critical' });
+        } else {
+            compatibility.push({ parts: `${cpu.name} + ${mobo.name}`, status: 'compatible', detail: 'Brands match' });
+        }
+    }
+    if (ram) compatibility.push({ parts: ram.name, status: 'compatible', detail: 'Check RAM type matches board' });
+    if (gpu) compatibility.push({ parts: gpu.name, status: 'compatible', detail: 'PCIe x16 compatible' });
+    
+    return {
+        compatible: issues.length === 0,
+        confidence: 'medium',
+        summary: issues.length ? 'Issues found' : 'Looks compatible',
+        compatibility, partDetails, issues,
+        suggestions: parts.length < 4 ? ['Add more components'] : [],
+        estimatedWattage: 500
+    };
+}
+
+function getPartRole(cat) {
+    const roles = { cpu: 'Brain of PC', motherboard: 'Connects all parts', ram: 'Active memory', gpu: 'Graphics processing', storage: 'Permanent storage', psu: 'Power supply', cooler: 'CPU cooling' };
+    return roles[(cat || '').toLowerCase()] || 'PC component';
+}
+
+// ===== SORTING =====
+let currentSort = 'default';
+
+function sortProducts(products) {
+    const sorted = [...products];
+    switch (currentSort) {
+        case 'name-az': return sorted.sort((a, b) => (a.i_name || '').localeCompare(b.i_name || ''));
+        case 'name-za': return sorted.sort((a, b) => (b.i_name || '').localeCompare(a.i_name || ''));
+        case 'price-low': return sorted.sort((a, b) => parseFloat(a.i_price) - parseFloat(b.i_price));
+        case 'price-high': return sorted.sort((a, b) => parseFloat(b.i_price) - parseFloat(a.i_price));
+        case 'stock-high': return sorted.sort((a, b) => (b.i_quantity || 0) - (a.i_quantity || 0));
+        case 'stock-low': return sorted.sort((a, b) => (a.i_quantity || 0) - (b.i_quantity || 0));
+        case 'brand-az': return sorted.sort((a, b) => (a.i_brand || '').localeCompare(b.i_brand || ''));
+        default: return sorted;
     }
 }
+
+window.setSort = function(sortType) {
+    currentSort = sortType;
+    document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
+    document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
+    renderProducts(getCurrentCategory());
+};
+
+window.selectBuilderCategory = function(category) {
+    renderProducts(category);
+};
+
+// Expose functions globally
+window.addToCart = addToCart;
+window.selectForBuild = selectForBuild;
+window.bookService = bookService;
+window.showProductDetail = window.showProductDetail;

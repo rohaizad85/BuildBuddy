@@ -64,57 +64,57 @@ class DataService {
     }
 
     async getOrCreateCart() {
-        try {
-            if (!this.currentSessionId) {
-                console.error('No session ID available for cart creation');
-                return null;
-            }
-            
-            // Check if cart already exists for this session
-            const carts = await supabase
-                .from('cart')
-                .select('cart_id')
-                .eq('session_id', this.currentSessionId);
-            
-            console.log('Existing carts:', carts);
-            
-            if (carts && carts.length > 0) {
-                this.currentCartId = carts[0].cart_id;
-                console.log('Using existing cart:', this.currentCartId);
-            } else {
-                // Create new cart
-                console.log('Creating new cart for session:', this.currentSessionId);
-                
-                const newCart = await supabase
-                    .from('cart')
-                    .insert({
-                        session_id: this.currentSessionId
-                    });
-                
-                console.log('New cart created:', newCart);
-                
-                if (newCart && newCart.length > 0) {
-                    this.currentCartId = newCart[0].cart_id;
-                } else {
-                    // If insert didn't return data, query again
-                    const createdCart = await supabase
-                        .from('cart')
-                        .select('cart_id')
-                        .eq('session_id', this.currentSessionId);
-                    
-                    if (createdCart && createdCart.length > 0) {
-                        this.currentCartId = createdCart[0].cart_id;
-                    }
-                }
-            }
-            
-            return this.currentCartId;
-            
-        } catch (error) {
-            console.error('Get or create cart error:', error);
+    try {
+        if (!this.currentSessionId) {
+            console.error('No session ID available for cart creation');
             return null;
         }
+        
+        // Get the LATEST cart for this session (not the first)
+        const carts = await supabase
+            .from('cart')
+            .select('cart_id')
+            .eq('session_id', this.currentSessionId)
+            .order('cart_id', 'desc');  // Get newest first
+        
+        console.log('Existing carts:', carts);
+        
+        if (carts && carts.length > 0) {
+            // Use the LATEST cart
+            this.currentCartId = carts[0].cart_id;
+            console.log('Using latest cart:', this.currentCartId);
+        } else {
+            // Create new cart
+            console.log('Creating new cart for session:', this.currentSessionId);
+            
+            const newCart = await supabase
+                .from('cart')
+                .insert({
+                    session_id: this.currentSessionId
+                });
+            
+            if (newCart && newCart.length > 0) {
+                this.currentCartId = newCart[0].cart_id;
+            } else {
+                const createdCart = await supabase
+                    .from('cart')
+                    .select('cart_id')
+                    .eq('session_id', this.currentSessionId)
+                    .order('cart_id', 'desc');
+                
+                if (createdCart && createdCart.length > 0) {
+                    this.currentCartId = createdCart[0].cart_id;
+                }
+            }
+        }
+        
+        return this.currentCartId;
+        
+    } catch (error) {
+        console.error('Get or create cart error:', error);
+        return null;
     }
+}
 
     async getInventory(category = null) {
         try {
@@ -411,6 +411,44 @@ class DataService {
             console.error('End session error:', error);
         }
     }
+
+    async createNewCart() {
+    try {
+        if (!this.currentSessionId) {
+            console.error('No session ID for new cart');
+            return null;
+        }
+        
+        console.log('Creating new cart for session:', this.currentSessionId);
+        
+        const newCart = await supabase
+            .from('cart')
+            .insert({
+                session_id: this.currentSessionId
+            });
+        
+        if (newCart && newCart.length > 0) {
+            this.currentCartId = newCart[0].cart_id;
+        } else {
+            const created = await supabase
+                .from('cart')
+                .select('cart_id')
+                .eq('session_id', this.currentSessionId)
+                .order('cart_id', 'desc');
+            
+            if (created && created.length > 0) {
+                this.currentCartId = created[0].cart_id;
+            }
+        }
+        
+        console.log('New cart created:', this.currentCartId);
+        return this.currentCartId;
+        
+    } catch (error) {
+        console.error('Create new cart error:', error);
+        return null;
+    }
+}
 }
 
 const dataService = new DataService();

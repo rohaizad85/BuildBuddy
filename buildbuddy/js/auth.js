@@ -158,7 +158,9 @@ window.handleLogin = async function(event) {
         
         // Redirect based on role
         setTimeout(() => {
-            if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+            if (userData.role === 'ADMIN') {
+                window.location.href = 'admin/admin-dashboard.html';
+            } else if (userData.role === 'STAFF') {
                 window.location.href = 'staff/staff-dashboard.html';
             } else {
                 window.location.href = 'index.html';
@@ -291,17 +293,17 @@ function checkAuth() {
         const userData = JSON.parse(user);
         loginBtnText.textContent = userData.name.split(' ')[0];
         
-        // Check role for profile/dashboard redirect
-        if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+        // Check role for correct redirect
+        if (userData.role === 'ADMIN') {
+            loginBtn.onclick = () => window.location.href = 'admin/admin-dashboard.html';
+        } else if (userData.role === 'STAFF') {
             loginBtn.onclick = () => window.location.href = 'staff/staff-dashboard.html';
         } else {
             loginBtn.onclick = () => window.location.href = 'profile.html';
         }
     } else if (loginBtn) {
         loginBtn.onclick = () => window.location.href = 'auth.html';
-        if (loginBtnText) {
-            loginBtnText.textContent = 'Login';
-        }
+        if (loginBtnText) loginBtnText.textContent = 'Login';
     }
 }
 

@@ -3,6 +3,7 @@ import supabase from '../supabase-client.js';
 let allOrders = [];
 let allStaff = [];
 let currentFilter = 'ALL';
+let currentSort = 'newest';
 let currentUserRole = null;
 let currentUserId = null;
 
@@ -27,16 +28,13 @@ async function checkStaffAccess() {
     try {
         const userData = JSON.parse(user);
         
-        // Store user ID and role
         currentUserId = userData.user_id || userData.id;
         currentUserRole = userData.role;
         
-        // Already staff in session
         if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
             return true;
         }
         
-        // Check database
         const dbUser = await supabase
             .from('users')
             .select('role')
@@ -48,7 +46,6 @@ async function checkStaffAccess() {
             return false;
         }
         
-        // Update stored role
         userData.role = dbUser.role;
         currentUserRole = dbUser.role;
         if (localStorage.getItem('buildbuddy_user')) {
@@ -98,7 +95,6 @@ async function loadOrders() {
     try {
         let orders;
         
-        // ADMIN sees all, STAFF sees only assigned
         if (currentUserRole === 'ADMIN') {
             orders = await supabase
                 .from('service_orders')
@@ -143,7 +139,7 @@ async function loadOrders() {
         console.error('Error loading orders:', error);
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px;">
+                <td colspan="7" style="text-align: center; padding: 40px;">
                     <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
                     <p>Failed to load orders. Please refresh the page.</p>
                 </td>
@@ -152,17 +148,55 @@ async function loadOrders() {
     }
 }
 
+function sortOrders(orders) {
+    const sorted = [...orders];
+    
+    switch (currentSort) {
+        case 'newest':
+            return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        case 'oldest':
+            return sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        case 'name-az':
+            return sorted.sort((a, b) => {
+                const nameA = (a.users?.full_name || 'Guest').toLowerCase();
+                const nameB = (b.users?.full_name || 'Guest').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+        case 'name-za':
+            return sorted.sort((a, b) => {
+                const nameA = (a.users?.full_name || 'Guest').toLowerCase();
+                const nameB = (b.users?.full_name || 'Guest').toLowerCase();
+                return nameB.localeCompare(nameA);
+            });
+        case 'id-asc':
+            return sorted.sort((a, b) => a.order_id - b.order_id);
+        case 'id-desc':
+            return sorted.sort((a, b) => b.order_id - a.order_id);
+        case 'due-date':
+            return sorted.sort((a, b) => {
+                if (!a.preferred_date) return 1;
+                if (!b.preferred_date) return -1;
+                return new Date(a.preferred_date) - new Date(b.preferred_date);
+            });
+        default:
+            return sorted;
+    }
+}
+
 function renderOrders() {
     const tbody = document.getElementById('ordersTableBody');
     
-    const filteredOrders = currentFilter === 'ALL' 
+    let filteredOrders = currentFilter === 'ALL' 
         ? allOrders 
         : allOrders.filter(o => o.order_status === currentFilter);
+    
+    // Apply sorting
+    filteredOrders = sortOrders(filteredOrders);
     
     if (filteredOrders.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px;">
+                <td colspan="7" style="text-align: center; padding: 40px;">
                     <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
                     <p>${currentUserRole === 'STAFF' ? 'No orders assigned to you.' : 'No orders found.'}</p>
                 </td>
@@ -178,7 +212,7 @@ function renderOrders() {
         const staffClass = order.assigned_staff_id ? 'assigned' : 'unassigned';
         
         return `
-            <tr>
+            <tr class="clickable-row" onclick="window.viewOrderDetails(${order.order_id})" style="cursor:pointer;">
                 <td><strong>#${order.order_id}</strong></td>
                 <td>
                     ${escapeHtml(customerName)}<br>
@@ -195,7 +229,7 @@ function renderOrders() {
                 <td>
                     <span class="status-badge status-${order.order_status}">${(order.order_status || '').replace(/_/g, ' ')}</span>
                 </td>
-                <td>
+                <td onclick="event.stopPropagation()">
                     ${currentUserRole === 'ADMIN' ? `
                         <button class="action-btn btn-assign" onclick="window.assignStaff(${order.order_id})">
                             <i class="fas fa-user-plus"></i>
@@ -203,9 +237,6 @@ function renderOrders() {
                     ` : ''}
                     <button class="action-btn btn-update" onclick="window.updateOrderStatus(${order.order_id}, '${order.order_status}')">
                         <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn" onclick="window.viewOrderDetails(${order.order_id})" style="background: #f0f0f5;">
-                        <i class="fas fa-eye"></i>
                     </button>
                 </td>
             </tr>
@@ -222,6 +253,14 @@ function updateStats() {
 
 window.filterOrders = function() {
     currentFilter = document.getElementById('statusFilter').value;
+    renderOrders();
+};
+
+window.sortOrdersBy = function(sortType) {
+    currentSort = sortType;
+    // Update active button
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.sort-btn[data-sort="${sortType}"]`)?.classList.add('active');
     renderOrders();
 };
 

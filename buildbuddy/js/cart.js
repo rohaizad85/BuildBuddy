@@ -10,26 +10,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadCart();
 });
 
-async function loadCart() {
-    const container = document.getElementById('cartContainer');
-    try {
-        const user = getUser();
-        if (user) {
-            await dataService.initSession();
-            await dataService.getOrCreateCart();
-            await loadDatabaseCart();
-        } else {
-            loadLocalCart();
-        }
-        await fetchItemDetails();
-        renderCart();
-        updateCartCount();
-    } catch (error) {
-        console.error('Error:', error);
-        container.innerHTML = '<p>Error loading cart</p>';
-    }
-}
-
 function getUser() {
     const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
     return user ? JSON.parse(user) : null;
@@ -47,9 +27,32 @@ async function loadDatabaseCart() {
     }));
 }
 
+async function loadCart() {
+    const container = document.getElementById('cartContainer');
+    try {
+        const user = getUser();
+        if (user) {
+            await dataService.initSession();
+            await dataService.getOrCreateCart();
+            await loadDatabaseCart();
+            // ALSO load local cart for bundles that aren't in DB
+            loadLocalCartBundles();
+        } else {
+            loadLocalCart();
+        }
+        await fetchItemDetails();
+        renderCart();
+        updateCartCount();
+    } catch (error) {
+        console.error('Error:', error);
+        container.innerHTML = '<p>Error loading cart</p>';
+    }
+}
+
 function loadLocalCart() {
     const local = JSON.parse(localStorage.getItem('buildbuddy_cart')) || [];
-    cartItems = []; cartServices = [];
+    cartItems = []; 
+    cartServices = [];
     local.forEach((item, i) => {
         if (item.type === 'service') {
             cartServices.push({ id: 'local_' + i, type: 'service', serviceId: item.id, quantity: 1 });
@@ -59,9 +62,39 @@ function loadLocalCart() {
     });
 }
 
+
+function loadLocalCartBundles() {
+    const local = JSON.parse(localStorage.getItem('buildbuddy_cart')) || [];
+    local.forEach((item, i) => {
+        if (item.type === 'bundle') {
+            // Check if bundle already exists in cartItems
+            const exists = cartItems.find(ci => ci.type === 'bundle' && ci.bundleId === item.id);
+            if (!exists) {
+                cartItems.push({
+                    id: 'local_bundle_' + i,
+                    type: 'bundle',
+                    bundleId: item.id,
+                    quantity: item.quantity || 1,
+                    price: item.price,
+                    name: item.name
+                });
+            }
+        }
+    });
+}
+
 async function fetchItemDetails() {
     for (const item of cartItems) {
-        if (item.productId && !inventoryCache[item.productId]) {
+        if (item.type === 'bundle' && item.bundleId) {
+            if (!inventoryCache['bundle_' + item.bundleId]) {
+                const data = await supabase.from('bundles').select('*').eq('bundle_id', item.bundleId).single();
+                if (data) {
+                    inventoryCache['bundle_' + item.bundleId] = data;
+                    item.price = data.bundle_price;
+                    item.name = data.bundle_name;
+                }
+            }
+        } else if (item.productId && !inventoryCache[item.productId]) {
             const data = await supabase.from('inventory').select('*').eq('i_id', item.productId).single();
             if (data) { inventoryCache[item.productId] = data; item.price = data.i_price; item.name = data.i_name; }
         }
@@ -86,24 +119,25 @@ function renderCart() {
     let subtotal = 0, html = '';
     
     for (const item of cartItems) {
-        const prod = inventoryCache[item.productId] || {};
-        const name = prod.i_name || item.name || 'Product';
-        const price = item.price || prod.i_price || 0;
-        const qty = item.quantity || 1;
-        subtotal += price * qty;
-        html += `
-            <div class="cart-item">
-                <div class="cart-item-image"><i class="fas fa-box"></i></div>
-                <div class="cart-item-details"><h4>${name}</h4><span class="item-type">Component</span></div>
-                <div class="cart-item-quantity">
-                    <button class="quantity-btn qty-btn" data-id="${item.id}" data-change="-1">-</button>
-                    <input type="text" class="quantity-input qty-input" data-id="${item.id}" value="${qty}">
-                    <button class="quantity-btn qty-btn" data-id="${item.id}" data-change="1">+</button>
-                </div>
-                <div class="cart-item-price">RM ${(price * qty).toFixed(2)}</div>
-                <button class="cart-item-remove" data-id="${item.id}"><i class="fas fa-trash-alt"></i></button>
-            </div>`;
-    }
+    const isBundle = item.type === 'bundle';
+    const prod = inventoryCache[isBundle ? ('bundle_' + item.bundleId) : item.productId] || {};
+    const name = isBundle ? (prod.bundle_name || item.name || 'Pre-Built PC') : (prod.i_name || item.name || 'Product');
+    const price = item.price || (isBundle ? prod.bundle_price : prod.i_price) || 0;
+    const qty = item.quantity || 1;
+    subtotal += price * qty;
+    html += `
+        <div class="cart-item">
+            <div class="cart-item-image"><i class="fas fa-${isBundle ? 'desktop' : 'box'}"></i></div>
+            <div class="cart-item-details"><h4>${name}</h4><span class="item-type">${isBundle ? 'Pre-Built PC' : 'Component'}</span></div>
+            <div class="cart-item-quantity">
+                <button class="quantity-btn qty-btn" data-id="${item.id}" data-change="-1">-</button>
+                <input type="text" class="quantity-input qty-input" data-id="${item.id}" value="${qty}">
+                <button class="quantity-btn qty-btn" data-id="${item.id}" data-change="1">+</button>
+            </div>
+            <div class="cart-item-price">RM ${(price * qty).toFixed(2)}</div>
+            <button class="cart-item-remove" data-id="${item.id}"><i class="fas fa-trash-alt"></i></button>
+        </div>`;
+}
     
     for (const s of cartServices) {
         const svc = servicesCache[s.serviceId] || {};
@@ -157,6 +191,7 @@ function attachEvents() {
             item.quantity = newQty;
             await saveQuantity(id, newQty);
             renderCart(); updateCartCount();
+            syncToLocalStorage();
         });
     });
     
@@ -175,9 +210,9 @@ function attachEvents() {
     });
     
     document.getElementById('checkoutBtn')?.addEventListener('click', () => {
-        if (!getUser()) { if (confirm('Login required. Go to login?')) window.location.href = 'auth.html'; return; }
-        alert('Proceeding to checkout...');
+    window.location.href = 'payment.html';
     });
+
 }
 
 async function processQtyInput(input) {
@@ -191,6 +226,7 @@ async function processQtyInput(input) {
     item.quantity = val;
     await saveQuantity(id, val);
     renderCart(); updateCartCount();
+    syncToLocalStorage();
 }
 
 async function saveQuantity(id, qty) {
@@ -204,23 +240,62 @@ async function handleRemove(itemId) {
     const item = [...cartItems, ...cartServices].find(i => i.id == itemId);
     if (!item) return;
     let itemName = 'this item';
-    if (item.type === 'service') { const svc = servicesCache[item.serviceId]; itemName = svc?.service_name || 'this service'; }
-    else { const prod = inventoryCache[item.productId]; itemName = prod?.i_name || item.name || 'this product'; }
+    if (item.type === 'service') { 
+        const svc = servicesCache[item.serviceId]; 
+        itemName = svc?.service_name || 'this service'; 
+    } else if (item.type === 'bundle') {
+        itemName = item.name || 'Pre-Built PC';
+    } else { 
+        const prod = inventoryCache[item.productId]; 
+        itemName = prod?.i_name || item.name || 'this product'; 
+    }
     
     const confirmed = await confirmPopup(itemName);
     if (!confirmed) return;
     
+    // Remove from arrays
     cartItems = cartItems.filter(i => i.id != itemId);
     cartServices = cartServices.filter(s => s.id != itemId);
     
+    // Update localStorage for ALL items (including bundles)
+    syncToLocalStorage();
+    
+    // Remove from database if applicable
     const user = getUser();
-    if (user && !String(itemId).startsWith('local_')) {
+    if (user && !String(itemId).startsWith('local_') && item.type !== 'bundle') {
         try {
-            if (item.type === 'service') await supabase.from('cart_service').delete().eq('cs_id', itemId);
-            else await supabase.from('cart_items').delete().eq('ci_id', itemId);
+            if (item.type === 'service') {
+                await supabase.from('cart_service').delete().eq('cs_id', itemId);
+            } else {
+                await supabase.from('cart_items').delete().eq('ci_id', itemId);
+            }
         } catch (e) { console.error('Remove error:', e); }
     }
-    renderCart(); updateCartCount();
+    
+    renderCart(); 
+    updateCartCount();
+}
+
+// Add this function to sync cart items back to localStorage
+function syncToLocalStorage() {
+    const localCart = cartItems.map(item => ({
+        type: item.type || 'product',
+        id: item.bundleId || item.productId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 1
+    }));
+    
+    // Also add services
+    cartServices.forEach(s => {
+        localCart.push({
+            type: 'service',
+            id: s.serviceId,
+            quantity: 1
+        });
+    });
+    
+    localStorage.setItem('buildbuddy_cart', JSON.stringify(localCart));
 }
 
 function confirmPopup(itemName) {

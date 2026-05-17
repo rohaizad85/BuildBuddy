@@ -110,33 +110,33 @@ export async function syncLocalCartToDatabase() {
  * Add item to cart (handles both local and database)
  */
 export async function addToCart(item) {
+    console.log('addToCart called:', item);
     const user = getUser();
     
     if (user) {
+        console.log('User logged in, using database cart');
         try {
-            if (item.type === 'bundle') {
-                // Bundles are stored in localStorage for now
-                const localCart = getLocalCart();
-                const existing = localCart.find(i => i.type === 'bundle' && i.id === item.id);
-                if (existing) {
-                    existing.quantity = (existing.quantity || 1) + 1;
-                } else {
-                    localCart.push({ ...item, quantity: 1 });
-                }
-                saveLocalCart(localCart);
-            } else if (item.type === 'product') {
+            if (item.type === 'product') {
                 await dataService.addToCart(item.id, item.quantity || 1);
+                console.log('Added to DB cart_items');
             } else if (item.type === 'service') {
                 await dataService.addServiceToCart(item.id);
+                console.log('Added to DB cart_service');
+            } else if (item.type === 'bundle') {
+                // Bundles still go to localStorage
+                const localCart = getLocalCart();
+                localCart.push({ ...item, quantity: item.quantity || 1 });
+                saveLocalCart(localCart);
             }
         } catch (error) {
-            console.error('Error adding to database cart:', error);
+            console.error('Database cart failed:', error);
             // Fallback to localStorage
             const localCart = getLocalCart();
-            localCart.push(item);
+            localCart.push({ ...item, quantity: 1 });
             saveLocalCart(localCart);
         }
     } else {
+        console.log('No user, using localStorage');
         const localCart = getLocalCart();
         const existing = localCart.find(i => i.type === item.type && i.id === item.id);
         if (existing && item.type !== 'service') {
