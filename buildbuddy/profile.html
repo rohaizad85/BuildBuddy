@@ -6,6 +6,7 @@
     <title>My Profile - BuildBuddy</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         .profile-header {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -157,6 +158,12 @@
             align-items: center;
             padding: 15px 0;
             border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .order-item:hover {
+            background: #f8f9fc;
         }
         
         .order-item:last-child {
@@ -246,6 +253,7 @@
             gap: 15px;
             justify-content: center;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
         
         .empty-state {
@@ -258,6 +266,26 @@
             font-size: 48px;
             color: #ccc;
             margin-bottom: 15px;
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         @media (max-width: 768px) {
@@ -289,7 +317,7 @@
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count">0</span>
                 </button>
-                <button class="login-btn" onclick="window.location.href='profile.html'">
+                <button class="login-btn" id="loginBtn">
                     <i class="fas fa-user"></i>
                     <span id="loginBtnText">Profile</span>
                 </button>
@@ -340,6 +368,36 @@
             </div>
         </div>
     </footer>
+
+    <script>
+        // Cart count and login button update
+        (function() {
+            const count = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]').length;
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = count);
+            
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            const loginBtnText = document.getElementById('loginBtnText');
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (user && loginBtnText && loginBtn) {
+                try {
+                    const userData = JSON.parse(user);
+                    loginBtnText.textContent = (userData.full_name || userData.name || 'User').split(' ')[0];
+                    loginBtn.onclick = () => {
+                        if (userData.role === 'ADMIN') {
+                            window.location.href = 'admin/admin-dashboard.html';
+                        } else if (userData.role === 'STAFF') {
+                            window.location.href = 'staff/staff-dashboard.html';
+                        } else {
+                            window.location.href = 'profile.html';
+                        }
+                    };
+                } catch (e) {}
+            } else if (loginBtn) {
+                loginBtn.onclick = () => window.location.href = 'auth.html';
+            }
+        })();
+    </script>
 
     <script type="module">
     import { initCart } from './js/cart-utils.js';

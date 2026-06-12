@@ -1,4 +1,5 @@
 import supabase from './supabase-client.js';
+import { downloadReceipt, getCurrentUser } from './receipt.js';
 
 let currentUser = null;
 let userOrders = [];
@@ -14,8 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function getUser() {
-    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-    return user ? JSON.parse(user) : null;
+    return getCurrentUser();
 }
 
 async function loadProfile() {
@@ -69,16 +69,13 @@ async function loadUserOrders() {
         
         userOrders = payments || [];
         
-        // For each payment, get cart items
         for (const order of userOrders) {
             if (order.cart_id) {
-                // Get cart items
                 const cartItems = await supabase
                     .from('cart_items')
                     .select('*')
                     .eq('cart_id', order.cart_id);
                 
-                // Get services
                 const cartServices = await supabase
                     .from('cart_service')
                     .select('*')
@@ -86,7 +83,6 @@ async function loadUserOrders() {
                 
                 const items = [];
                 
-                // Fetch inventory names for each cart item
                 if (cartItems && Array.isArray(cartItems)) {
                     for (const ci of cartItems) {
                         const inv = await supabase
@@ -100,12 +96,12 @@ async function loadUserOrders() {
                             category: inv?.i_category || '',
                             price: inv?.i_price || ci.total_price,
                             quantity: ci.quantity || 1,
-                            total: ci.total_price
+                            total: ci.total_price,
+                            type: 'product'
                         });
                     }
                 }
                 
-                // Fetch service names
                 if (cartServices && Array.isArray(cartServices)) {
                     for (const cs of cartServices) {
                         const svc = await supabase
@@ -118,7 +114,8 @@ async function loadUserOrders() {
                             name: svc?.service_name || 'Service #' + cs.service_id,
                             price: svc?.service_price || 0,
                             quantity: 1,
-                            total: svc?.service_price || 0
+                            total: svc?.service_price || 0,
+                            type: 'service'
                         });
                     }
                 }
@@ -215,7 +212,6 @@ function renderProfile() {
     `;
 }
 
-// ===== RENDER ORDERS FROM PAYMENT TABLE =====
 function renderOrders() {
     if (userOrders.length === 0) {
         return `<div class="empty-state"><i class="fas fa-box-open"></i><p>No orders yet</p><button class="edit-btn" onclick="window.location.href='index.html'" style="margin-top:15px;">Start Shopping</button></div>`;
@@ -253,33 +249,39 @@ window.showOrderDetail = function(paymentId) {
     if (!order) return;
     
     const statusInfo = getPaymentStatusInfo(order.payment_status, order.payment_method);
+    const receiptId = 'BB-' + String(order.payment_id).padStart(6, '0');
+    const fullDate = order.payment_date ? new Date(order.payment_date).toLocaleDateString('en-MY', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+    const time = order.payment_date ? new Date(order.payment_date).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' }) : '';
     
     let itemsHTML = '';
     if (order.items && order.items.length > 0) {
         order.items.forEach(item => {
+            const itemTotal = parseFloat(item.total || item.price * (item.quantity || 1)).toFixed(2);
             itemsHTML += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f5;">
-                <span>${item.name} ${item.quantity > 1 ? 'x' + item.quantity : ''}</span>
-                <span>RM ${parseFloat(item.total || item.price * item.quantity).toFixed(2)}</span>
+                <span>${item.type === 'service' ? '🔧 ' : '📦 '}${item.name} ${item.quantity > 1 ? 'x' + item.quantity : ''}</span>
+                <span>RM ${itemTotal}</span>
             </div>`;
         });
     } else {
-        itemsHTML = '<p style="color:#666;">Loading items...</p>';
+        itemsHTML = '<p style="color:#666;">No items found.</p>';
     }
     
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
     
     const popup = document.createElement('div');
-    popup.style.cssText = 'background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+    popup.style.cssText = 'background:white;border-radius:16px;padding:30px;max-width:550px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
     
     popup.innerHTML = `
         <h3 style="color:#1a1a2e;margin-bottom:5px;">📦 Order #${order.payment_id}</h3>
+        <p style="color:#888;font-size:12px;margin-bottom:5px;">Receipt ID: ${receiptId}</p>
         <span class="order-status ${statusInfo.class}" style="display:inline-block;margin-bottom:15px;">${statusInfo.label}</span>
         <hr style="border-color:#e0e0e0;margin:15px 0;">
         <div style="display:grid;gap:5px;margin-bottom:15px;">
-            <p><strong>Date:</strong> ${formatDate(order.payment_date)}</p>
+            <p><strong>Date:</strong> ${fullDate} at ${time}</p>
             <p><strong>Payment:</strong> ${order.payment_method === 'cash' ? 'Cash on Delivery' : 'Online Payment'}</p>
             <p><strong>Status:</strong> ${statusInfo.label}</p>
+            <p><strong>Receipt:</strong> #${receiptId}</p>
         </div>
         <h4 style="color:#1a1a2e;margin-bottom:10px;">Items Purchased:</h4>
         ${itemsHTML}
@@ -287,7 +289,12 @@ window.showOrderDetail = function(paymentId) {
         <div style="text-align:right;font-size:18px;font-weight:700;color:#1a1a2e;">Total: RM ${parseFloat(order.total_amount).toFixed(2)}</div>
         ${order.payment_method === 'cash' && order.payment_status === 'PENDING' ? 
             `<div style="margin-top:10px;padding:12px;background:#fff3e0;border-radius:8px;color:#e65100;font-size:13px;">💰 Please prepare <strong>RM ${parseFloat(order.total_amount).toFixed(2)}</strong> upon delivery.</div>` : ''}
-        <button onclick="this.closest('div').parentElement.remove()" style="width:100%;margin-top:15px;padding:12px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Close</button>
+        <div style="display:flex;gap:10px;margin-top:15px;">
+            <button onclick="window.downloadOrderReceipt(${order.payment_id})" style="flex:1;padding:12px;background:#1a1a2e;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
+                <i class="fas fa-download"></i> Download PDF
+            </button>
+            <button onclick="this.closest('div').parentElement.remove()" style="flex:1;padding:12px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Close</button>
+        </div>
     `;
     
     overlay.appendChild(popup);
@@ -295,7 +302,21 @@ window.showOrderDetail = function(paymentId) {
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 };
 
-// ===== EDIT PROFILE (unchanged) =====
+// ===== DOWNLOAD RECEIPT (uses receipt.js) =====
+window.downloadOrderReceipt = function(paymentId) {
+    const order = userOrders.find(o => o.payment_id === paymentId);
+    if (!order) return;
+    
+    const user = getCurrentUser();
+    if (!user) {
+        alert('User data not found. Please log in again.');
+        return;
+    }
+    
+    downloadReceipt(order, user);
+};
+
+// ===== EDIT PROFILE =====
 window.showEditProfile = function() {
     const fullName = currentUser.full_name || currentUser.name || '';
     const email = currentUser.email || '';

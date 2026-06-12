@@ -1,6 +1,7 @@
 import supabase from './supabase-client.js';
 import dataService from './data-service.js';
 import { openMapSelector } from './services/maps.js';
+import { downloadReceipt, getCurrentUser } from './receipt.js';
 
 let cartItems = [];
 let cartServices = [];
@@ -14,8 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function getUser() {
-    const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-    return user ? JSON.parse(user) : null;
+    return getCurrentUser();
 }
 
 async function loadCheckout() {
@@ -205,7 +205,6 @@ function renderCheckout() {
     if (mapBtn) {
         mapBtn.addEventListener('click', openMapSelector);
     }
-
 }
 
 function renderSummaryItems() {
@@ -242,7 +241,6 @@ window.applyVoucher = function() {
         return;
     }
     
-    // Simulation - in real app, validate against database
     if (code.toUpperCase() === 'BUILD10') {
         voucherDiscount = cartTotal * 0.1;
         msgEl.className = 'voucher-msg success';
@@ -271,7 +269,6 @@ function updateTotalDisplay() {
 }
 
 window.placeOrder = async function() {
-    // Validate
     const name = document.getElementById('shipName').value.trim();
     const phone = document.getElementById('shipPhone').value.trim();
     const email = document.getElementById('shipEmail').value.trim();
@@ -298,13 +295,11 @@ window.placeOrder = async function() {
         const user = getUser();
         let sessionId = localStorage.getItem('buildbuddy_session_id');
         
-        // Generate session ID for guests
         if (!sessionId) {
             sessionId = 'sess_guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             localStorage.setItem('buildbuddy_session_id', sessionId);
         }
         
-        // Create guest session in database if not exists
         if (!user) {
             const existingSession = await supabase.from('usersession')
                 .select('session_id')
@@ -321,7 +316,7 @@ window.placeOrder = async function() {
         const cartId = user ? dataService.currentCartId : null;
         
         // Create payment record
-        await supabase.from('payment').insert({
+        const paymentResult = await supabase.from('payment').insert({
             session_id: sessionId,
             cart_id: cartId,
             user_id: user ? (user.user_id || user.id) : null,
@@ -329,7 +324,7 @@ window.placeOrder = async function() {
             payment_method: selectedPayment,
             payment_status: selectedPayment === 'cash' ? 'PENDING' : 'PAID',
             payment_date: new Date().toISOString()
-        });
+        }).select().single();
         
         // Decrease stock for inventory items
         for (const item of cartItems) {
@@ -346,23 +341,9 @@ window.placeOrder = async function() {
                     .eq('bundle_id', item.bundleId);
             }
         }
-        /*
-        // Clear cart
-        if (user) {
-            for (const item of cartItems) {
-                if (!String(item.id).startsWith('local_')) {
-                    try { await supabase.from('cart_items').delete().eq('ci_id', item.id); } catch (e) {}
-                }
-            }
-            for (const s of cartServices) {
-                if (!String(s.id).startsWith('local_')) {
-                    try { await supabase.from('cart_service').delete().eq('cs_id', s.id); } catch (e) {}
-                }
-            }
-        }*/
         
-        // Show success
-        showSuccess(total);
+        // Show success with receipt download
+        showSuccess(total, paymentResult?.payment_id);
 
         if (user) {
             await dataService.createNewCart();
@@ -378,12 +359,12 @@ window.placeOrder = async function() {
     }
 };
 
-function showSuccess(total) {
+function showSuccess(total, paymentId) {
     const overlay = document.createElement('div');
     overlay.className = 'success-overlay';
     
     const isCash = selectedPayment === 'cash';
-    const orderRef = 'BB' + Date.now().toString(36).toUpperCase();
+    const orderRef = paymentId ? 'BB-' + String(paymentId).padStart(6, '0') : 'BB' + Date.now().toString(36).toUpperCase();
     
     overlay.innerHTML = `
         <div class="success-modal">
@@ -402,6 +383,9 @@ function showSuccess(total) {
                 Expected delivery: <strong>3-5 business days</strong></p>
             `}
             <p style="color:#888;font-size:13px;">Order reference: #${orderRef}</p>
+            <button class="place-order-btn download-receipt-btn" style="margin-top: 10px; background: #1a1a2e; color: white;">
+                <i class="fas fa-download"></i> Download Receipt (PDF)
+            </button>
             <button class="place-order-btn" onclick="window.location.href='index.html'">
                 <i class="fas fa-home"></i> Back to Home
             </button>
@@ -410,6 +394,43 @@ function showSuccess(total) {
     
     document.body.appendChild(overlay);
     document.querySelectorAll('.cart-count').forEach(el => el.textContent = '0');
+    
+    // Download receipt button click handler
+    const downloadBtn = overlay.querySelector('.download-receipt-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+            const user = getUser();
+            const orderData = {
+                payment_id: paymentId || orderRef.replace('BB-', ''),
+                payment_method: selectedPayment,
+                payment_status: selectedPayment === 'cash' ? 'PENDING' : 'PAID',
+                payment_date: new Date().toISOString(),
+                total_amount: total,
+                items: [
+                    ...cartItems.map(i => ({
+                        name: i.name || 'Product',
+                        type: i.type || 'product',
+                        quantity: i.quantity || 1,
+                        price: i.price || 0,
+                        total: (i.price || 0) * (i.quantity || 1)
+                    })),
+                    ...cartServices.map(s => ({
+                        name: s.name || 'Service',
+                        type: 'service',
+                        quantity: 1,
+                        price: parseFloat(s.price || 0),
+                        total: parseFloat(s.price || 0)
+                    }))
+                ]
+            };
+            downloadReceipt(orderData, user || {
+                full_name: document.getElementById('shipName').value,
+                email: document.getElementById('shipEmail').value,
+                phone: document.getElementById('shipPhone').value,
+                address: document.getElementById('shipAddress').value
+            });
+        });
+    }
 }
 
 function showError(elementId, message) {

@@ -6,6 +6,8 @@
     <title>Checkout - BuildBuddy</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         .checkout-header {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -122,6 +124,40 @@
             top: 100px;
         }
         .order-summary h3 { color: #1a1a2e; margin-bottom: 20px; }
+
+        .receipt-preview {
+            background: white;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .download-receipt-btn {
+            background: #1a1a2e !important;
+            color: white !important;
+        }
+
+        .download-receipt-btn:hover {
+            background: #2a2a4e !important;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(26, 26, 46, 0.3);
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .receipt-printable, .receipt-printable * {
+                visibility: visible;
+            }
+            .receipt-printable {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
         
         .summary-item {
             display: flex;
@@ -297,7 +333,19 @@
                         if (staffLink) staffLink.style.display = 'inline-block';
                     }
                     const loginBtnText = document.getElementById('loginBtnText');
-                    if (loginBtnText) loginBtnText.textContent = (userData.full_name || 'User').split(' ')[0];
+                    const loginBtn = document.getElementById('loginBtn');
+                    if (loginBtnText) loginBtnText.textContent = (userData.full_name || userData.name || 'User').split(' ')[0];
+                    if (loginBtn) {
+                        loginBtn.onclick = () => {
+                            if (userData.role === 'ADMIN') {
+                                window.location.href = 'admin/admin-dashboard.html';
+                            } else if (userData.role === 'STAFF') {
+                                window.location.href = 'staff/staff-dashboard.html';
+                            } else {
+                                window.location.href = 'profile.html';
+                            }
+                        };
+                    }
                 } catch (e) {}
             }
             const count = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]').length;

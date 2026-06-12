@@ -181,31 +181,12 @@
         </div>
     </footer>
 
+    <!-- Cart count + user login handling -->
     <script>
-        // Check user role and update navigation
-        function updateUIBasedOnRole() {
-            const staffNavLink = document.getElementById('staffNavLink');
-            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-            
-            if (user && staffNavLink) {
-                try {
-                    const userData = JSON.parse(user);
-                    // Show staff link only for users with STAFF role
-                    if (userData.role === 'STAFF') {
-                        staffNavLink.style.display = 'inline-block';
-                    }
-                } catch (e) {
-                    console.error('Error parsing user data:', e);
-                }
-            }
-        }
-
-        // Simple cart count update (runs before modules load)
         (function() {
             const savedCart = localStorage.getItem('buildbuddy_cart');
             const count = savedCart ? JSON.parse(savedCart).length : 0;
-            const cartCounts = document.querySelectorAll('.cart-count');
-            cartCounts.forEach(el => el.textContent = count);
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = count);
             
             const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
             const loginBtnText = document.getElementById('loginBtnText');
@@ -214,96 +195,20 @@
             if (user && loginBtnText && loginBtn) {
                 const userData = JSON.parse(user);
                 loginBtnText.textContent = userData.name ? userData.name.split(' ')[0] : userData.full_name ? userData.full_name.split(' ')[0] : 'User';
-                loginBtn.onclick = () => window.location.href = 'profile.html';
+                loginBtn.onclick = () => {
+                    if (userData.role === 'ADMIN') {
+                        window.location.href = 'admin/admin-dashboard.html';
+                    } else if (userData.role === 'STAFF') {
+                        window.location.href = 'staff/staff-dashboard.html';
+                    } else {
+                        window.location.href = 'profile.html';
+                    }
+                };
             } else if (loginBtn) {
                 loginBtn.onclick = () => window.location.href = 'auth.html';
             }
             
-            // Update UI based on user role
-            updateUIBasedOnRole();
-        })();
-    </script>
-
-    <script type="module">
-    import supabase from './js/supabase-client.js';
-    import { initCart, updateCartCountDisplay, setupLoginButton } from './js/cart-utils.js';
-    
-    // Load featured pre-built PCs
-    async function loadFeaturedPrebuilts() {
-        const grid = document.getElementById('featuredPrebuildGrid');
-        
-        try {
-            const bundles = await supabase
-                .from('bundles')
-                .select('*')
-                .order('bundle_price')
-                .limit(3);
-            
-            if (!bundles || bundles.length === 0) {
-                grid.innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                        <i class="fas fa-box-open" style="font-size: 40px; color: #ccc;"></i>
-                        <p style="margin-top: 20px; color: #666;">No pre-built PCs available yet.</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            grid.innerHTML = bundles.map(bundle => {
-                const badgeClass = getBadgeClass(bundle.bundle_category);
-                const specs = bundle.bundle_specs || {};
-                
-                return `
-                    <div class="prebuild-card" onclick="window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">
-                        <div class="prebuild-badge ${badgeClass}">${bundle.bundle_category || 'Standard'}</div>
-                        <div class="prebuild-image">
-                            <i class="fas fa-computer"></i>
-                        </div>
-                        <h3>${bundle.bundle_name}</h3>
-                        <div class="prebuild-specs">
-                            ${specs.cpu ? `<span>${specs.cpu}</span>` : ''}
-                            ${specs.ram ? `<span>${specs.ram}</span>` : ''}
-                            ${specs.gpu ? `<span>${specs.gpu}</span>` : ''}
-                            ${specs.storage ? `<span>${specs.storage}</span>` : ''}
-                        </div>
-                        <div class="prebuild-price">RM ${parseFloat(bundle.bundle_price).toLocaleString()}</div>
-                        <button class="btn-outline" onclick="event.stopPropagation(); window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">View Details</button>
-                    </div>
-                `;
-            }).join('');
-            
-        } catch (error) {
-            console.error('Error loading featured prebuilts:', error);
-            grid.innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
-                    <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #f44336;"></i>
-                    <p style="margin-top: 20px; color: #666;">Failed to load pre-built PCs.</p>
-                </div>
-            `;
-        }
-    }
-    
-    function getBadgeClass(category) {
-        const classes = {
-            'beginner': 'beginner',
-            'gaming': 'popular',
-            'elite': 'elite',
-            'budget': 'beginner',
-            'creator': 'elite'
-        };
-        return classes[category] || 'beginner';
-    }
-    
-    // Initialize everything
-    document.addEventListener('DOMContentLoaded', async () => {
-        await initCart();
-        loadFeaturedPrebuilts();
-    });
-</script>
-    <script>
-        // Show staff link for STAFF/ADMIN users
-        (function() {
-            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            // Show staff link for STAFF/ADMIN users
             if (user) {
                 try {
                     const userData = JSON.parse(user);
@@ -314,6 +219,82 @@
                 } catch (e) {}
             }
         })();
+    </script>
+
+    <script type="module">
+        import supabase from './js/supabase-client.js';
+        import { initCart, updateCartCountDisplay } from './js/cart-utils.js';
+
+        // Load featured pre-built PCs
+        async function loadFeaturedPrebuilts() {
+            const grid = document.getElementById('featuredPrebuildGrid');
+            
+            try {
+                const bundles = await supabase
+                    .from('bundles')
+                    .select('*')
+                    .order('bundle_price')
+                    .limit(3);
+                
+                if (!bundles || bundles.length === 0) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                            <i class="fas fa-box-open" style="font-size: 40px; color: #ccc;"></i>
+                            <p style="margin-top: 20px; color: #666;">No pre-built PCs available yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = bundles.map(bundle => {
+                    const badgeClass = getBadgeClass(bundle.bundle_category);
+                    const specs = bundle.bundle_specs || {};
+                    
+                    return `
+                        <div class="prebuild-card" onclick="window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">
+                            <div class="prebuild-badge ${badgeClass}">${bundle.bundle_category || 'Standard'}</div>
+                            <div class="prebuild-image">
+                                <i class="fas fa-computer"></i>
+                            </div>
+                            <h3>${bundle.bundle_name}</h3>
+                            <div class="prebuild-specs">
+                                ${specs.cpu ? `<span>${specs.cpu}</span>` : ''}
+                                ${specs.ram ? `<span>${specs.ram}</span>` : ''}
+                                ${specs.gpu ? `<span>${specs.gpu}</span>` : ''}
+                                ${specs.storage ? `<span>${specs.storage}</span>` : ''}
+                            </div>
+                            <div class="prebuild-price">RM ${parseFloat(bundle.bundle_price).toLocaleString()}</div>
+                            <button class="btn-outline" onclick="event.stopPropagation(); window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">View Details</button>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading featured prebuilts:', error);
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #f44336;"></i>
+                        <p style="margin-top: 20px; color: #666;">Failed to load pre-built PCs.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function getBadgeClass(category) {
+            const classes = {
+                'beginner': 'beginner',
+                'gaming': 'popular',
+                'elite': 'elite',
+                'budget': 'beginner',
+                'creator': 'elite'
+            };
+            return classes[category] || 'beginner';
+        }
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initCart();
+            loadFeaturedPrebuilts();
+        });
     </script>
 
     <script type="module" src="js/script.js"></script>
