@@ -9,6 +9,7 @@ let cartTotal = 0;
 let selectedPayment = null;
 let voucherDiscount = 0;
 let userData = null;
+let originalStockData = {}; // Store original stock for rollback if needed
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadCheckout();
@@ -30,11 +31,19 @@ async function loadCheckout() {
             const services = await dataService.getCartServices();
             
             cartItems = (items || []).map(i => ({
-                id: i.ci_id, type: 'product', productId: i.i_id,
-                quantity: i.quantity || 1, price: i.total_price ? i.total_price / (i.quantity || 1) : 0
+                id: i.ci_id, 
+                type: 'product', 
+                productId: i.i_id,
+                quantity: i.quantity || 1,
+                price: i.total_price ? i.total_price / (i.quantity || 1) : 0
             }));
             cartServices = (services || []).map(s => ({
-                id: s.cs_id, type: 'service', serviceId: s.service_id, quantity: 1
+                id: s.cs_id, 
+                type: 'service', 
+                serviceId: s.service_id, 
+                quantity: 1,
+                price: 0,
+                name: ''
             }));
             
             // ALSO load localStorage items (bundles + any items not in DB)
@@ -43,17 +52,40 @@ async function loadCheckout() {
                 if (item.type === 'product') {
                     const exists = cartItems.find(ci => ci.productId === item.id && !String(ci.id).startsWith('local_'));
                     if (!exists) {
-                        cartItems.push({ id: 'local_prod_' + i, type: 'product', productId: item.id, quantity: item.quantity || 1, price: item.price, name: item.name });
+                        cartItems.push({ 
+                            id: 'local_prod_' + i, 
+                            type: 'product', 
+                            productId: item.id, 
+                            quantity: item.quantity || 1, 
+                            price: item.price, 
+                            name: item.name,
+                            stock: item.stock || 0
+                        });
                     }
                 } else if (item.type === 'bundle') {
                     const exists = cartItems.find(ci => ci.type === 'bundle' && ci.bundleId === item.id);
                     if (!exists) {
-                        cartItems.push({ id: 'local_bundle_' + i, type: 'bundle', bundleId: item.id, quantity: item.quantity || 1, price: item.price, name: item.name });
+                        cartItems.push({ 
+                            id: 'local_bundle_' + i, 
+                            type: 'bundle', 
+                            bundleId: item.id, 
+                            quantity: item.quantity || 1, 
+                            price: item.price, 
+                            name: item.name,
+                            stock: item.stock || 0
+                        });
                     }
                 } else if (item.type === 'service') {
                     const exists = cartServices.find(cs => cs.serviceId === item.id);
                     if (!exists) {
-                        cartServices.push({ id: 'local_svc_' + i, type: 'service', serviceId: item.id, quantity: 1 });
+                        cartServices.push({ 
+                            id: 'local_svc_' + i, 
+                            type: 'service', 
+                            serviceId: item.id, 
+                            quantity: 1,
+                            price: item.price || 0,
+                            name: item.name || ''
+                        });
                     }
                 }
             });
@@ -70,14 +102,30 @@ async function loadCheckout() {
             cartServices = [];
             local.forEach((item, i) => {
                 if (item.type === 'service') {
-                    cartServices.push({ id: 'local_' + i, type: 'service', serviceId: item.id, quantity: 1 });
+                    cartServices.push({ 
+                        id: 'local_' + i, 
+                        type: 'service', 
+                        serviceId: item.id, 
+                        quantity: 1,
+                        price: item.price || 0,
+                        name: item.name || ''
+                    });
                 } else {
-                    cartItems.push({ id: 'local_' + i, type: item.type || 'product', productId: item.id, bundleId: item.id, quantity: item.quantity || 1, price: item.price, name: item.name });
+                    cartItems.push({ 
+                        id: 'local_' + i, 
+                        type: item.type || 'product', 
+                        productId: item.id, 
+                        bundleId: item.id, 
+                        quantity: item.quantity || 1, 
+                        price: item.price, 
+                        name: item.name,
+                        stock: item.stock || 0
+                    });
                 }
             });
         }
         
-        // Fetch details
+        // Fetch details and store original stock
         await fetchDetails();
         
         // Calculate total
@@ -99,16 +147,30 @@ async function loadCheckout() {
 async function fetchDetails() {
     for (const item of cartItems) {
         if (item.productId) {
-            const data = await supabase.from('inventory').select('*').eq('i_id', item.productId).single();
-            if (data) { item.price = data.i_price; item.name = data.i_name; item.stock = data.i_quantity; }
+            const { data, error } = await supabase.from('inventory').select('*').eq('i_id', item.productId).single();
+            if (data && !error) { 
+                item.price = data.i_price; 
+                item.name = data.i_name; 
+                item.stock = data.i_quantity;
+                // Store original stock for verification
+                originalStockData['prod_' + item.productId] = data.i_quantity;
+            }
         } else if (item.bundleId) {
-            const data = await supabase.from('bundles').select('*').eq('bundle_id', item.bundleId).single();
-            if (data) { item.price = data.bundle_price; item.name = data.bundle_name; item.stock = data.bundle_stock; }
+            const { data, error } = await supabase.from('bundles').select('*').eq('bundle_id', item.bundleId).single();
+            if (data && !error) { 
+                item.price = data.bundle_price; 
+                item.name = data.bundle_name; 
+                item.stock = data.bundle_stock;
+                originalStockData['bundle_' + item.bundleId] = data.bundle_stock;
+            }
         }
     }
     for (const s of cartServices) {
-        const data = await supabase.from('service').select('*').eq('service_id', s.serviceId).single();
-        if (data) { s.name = data.service_name; s.price = data.service_price; }
+        const { data, error } = await supabase.from('service').select('*').eq('service_id', s.serviceId).single();
+        if (data && !error) { 
+            s.name = data.service_name; 
+            s.price = data.service_price; 
+        }
     }
 }
 
@@ -210,7 +272,8 @@ function renderCheckout() {
 function renderSummaryItems() {
     let html = '';
     cartItems.forEach(item => {
-        html += `<div class="summary-item"><span>${item.name || 'Item'} x${item.quantity || 1}</span><span>RM ${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span></div>`;
+        const itemTotal = (item.price || 0) * (item.quantity || 1);
+        html += `<div class="summary-item"><span>${item.name || 'Item'} x${item.quantity || 1}</span><span>RM ${itemTotal.toFixed(2)}</span></div>`;
     });
     cartServices.forEach(s => {
         html += `<div class="summary-item"><span>${s.name || 'Service'}</span><span>RM ${parseFloat(s.price || 0).toFixed(2)}</span></div>`;
@@ -291,6 +354,82 @@ window.placeOrder = async function() {
     btn.disabled = true;
     
     try {
+        // ✅ FIXED: Proper stock reduction with quantity
+        const stockReductions = [];
+        
+        // Check stock availability first
+        for (const item of cartItems) {
+            const quantity = item.quantity || 1;
+            
+            if (item.productId) {
+                // Fetch current stock to ensure we have the latest
+                const { data: currentStock, error: stockError } = await supabase
+                    .from('inventory')
+                    .select('i_quantity')
+                    .eq('i_id', item.productId)
+                    .single();
+                
+                if (stockError) {
+                    throw new Error(`Failed to check stock for ${item.name || 'item'}`);
+                }
+                
+                if (currentStock.i_quantity < quantity) {
+                    throw new Error(`Not enough stock for "${item.name || 'Item'}". Available: ${currentStock.i_quantity}, Requested: ${quantity}`);
+                }
+                
+                stockReductions.push({
+                    type: 'inventory',
+                    id: item.productId,
+                    quantity: quantity,
+                    currentStock: currentStock.i_quantity,
+                    newStock: currentStock.i_quantity - quantity,
+                    name: item.name
+                });
+            }
+            
+            if (item.bundleId) {
+                const { data: currentStock, error: stockError } = await supabase
+                    .from('bundles')
+                    .select('bundle_stock')
+                    .eq('bundle_id', item.bundleId)
+                    .single();
+                
+                if (stockError) {
+                    throw new Error(`Failed to check stock for ${item.name || 'bundle'}`);
+                }
+                
+                if (currentStock.bundle_stock < quantity) {
+                    throw new Error(`Not enough stock for "${item.name || 'Bundle'}". Available: ${currentStock.bundle_stock}, Requested: ${quantity}`);
+                }
+                
+                stockReductions.push({
+                    type: 'bundle',
+                    id: item.bundleId,
+                    quantity: quantity,
+                    currentStock: currentStock.bundle_stock,
+                    newStock: currentStock.bundle_stock - quantity,
+                    name: item.name
+                });
+            }
+        }
+        
+        // Now perform stock reductions
+        for (const reduction of stockReductions) {
+            console.log(`✅ Reducing stock for ${reduction.name}: ${reduction.currentStock} → ${reduction.newStock} (Qty: ${reduction.quantity})`);
+            
+            if (reduction.type === 'inventory') {
+                await supabase
+                    .from('inventory')
+                    .update({ i_quantity: Math.max(0, reduction.newStock) })
+                    .eq('i_id', reduction.id);
+            } else if (reduction.type === 'bundle') {
+                await supabase
+                    .from('bundles')
+                    .update({ bundle_stock: Math.max(0, reduction.newStock) })
+                    .eq('bundle_id', reduction.id);
+            }
+        }
+        
         const total = getFinalTotal();
         const user = getUser();
         let sessionId = localStorage.getItem('buildbuddy_session_id');
@@ -326,22 +465,6 @@ window.placeOrder = async function() {
             payment_date: new Date().toISOString()
         }).select().single();
         
-        // Decrease stock for inventory items
-        for (const item of cartItems) {
-            if (item.productId && item.stock !== undefined) {
-                const newStock = item.stock - (item.quantity || 1);
-                await supabase.from('inventory')
-                    .update({ i_quantity: Math.max(0, newStock) })
-                    .eq('i_id', item.productId);
-            }
-            if (item.bundleId && item.stock !== undefined) {
-                const newStock = item.stock - (item.quantity || 1);
-                await supabase.from('bundles')
-                    .update({ bundle_stock: Math.max(0, newStock) })
-                    .eq('bundle_id', item.bundleId);
-            }
-        }
-        
         // Show success with receipt download
         showSuccess(total, paymentResult?.payment_id);
 
@@ -353,7 +476,7 @@ window.placeOrder = async function() {
         
     } catch (error) {
         console.error('Order failed:', error);
-        alert('Failed to place order. Please try again.');
+        alert(error.message || 'Failed to place order. Please try again.');
         btn.innerHTML = '<i class="fas fa-lock"></i> Place Order';
         btn.disabled = false;
     }
@@ -442,3 +565,5 @@ function escapeAttr(str) {
     if (!str) return '';
     return str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+console.log('✅ checkout.js loaded');

@@ -46,6 +46,373 @@
         }
         .sort-option:hover { background: #f0fdff; }
         .sort-option.active { background: #e0f7fa; color: #00a8cc; font-weight: 600; }
+
+        /* Product card with image */
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.12);
+        }
+        .product-card.selected {
+            border: 2px solid #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+        .product-image {
+            width: 100%;
+            padding-top: 80%;
+            position: relative;
+            background: #f8f9fc;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .product-image img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 10px;
+        }
+        .product-image .placeholder-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #ccc;
+            width: 100%;
+            height: 100%;
+            background: #f8f9fc;
+        }
+        .product-image .placeholder-icon i {
+            font-size: 48px;
+            color: #00d4ff;
+            margin-bottom: 8px;
+        }
+        .product-image .placeholder-icon span {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .product-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #00d4ff20;
+            color: #00a8cc;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .product-card h4 {
+            font-size: 15px;
+            margin: 0 0 4px 0;
+            color: #1a1a2e;
+        }
+        .product-specs {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .product-price {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin: 4px 0;
+        }
+        .product-stock {
+            font-size: 13px;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        .product-stock.low-stock { color: #f44336; }
+        .product-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: auto;
+        }
+        .product-actions button {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-select {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .btn-select:hover {
+            background: #c8e6c9;
+        }
+        .btn-select.selected-btn {
+            background: #00d4ff;
+            color: #1a1a2e;
+        }
+        .btn-add {
+            background: #1a1a2e;
+            color: white;
+        }
+        .btn-add:hover {
+            background: #16213e;
+        }
+
+        /* Main layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        .sidebar {
+            position: sticky;
+            top: 20px;
+            align-self: start;
+        }
+        .build-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            margin-top: 20px;
+        }
+        .build-summary h3 {
+            margin: 0 0 15px 0;
+            color: #1a1a2e;
+        }
+        .build-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f5;
+            font-size: 13px;
+        }
+        .build-item-category {
+            font-weight: 600;
+            color: #00a8cc;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .build-item-name {
+            color: #555;
+        }
+        .build-item-price {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .build-total {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 0;
+            font-size: 18px;
+            font-weight: 700;
+            border-top: 2px solid #e0e0e0;
+            margin-top: 10px;
+        }
+        .empty-build {
+            color: #999;
+            text-align: center;
+            padding: 20px 0;
+        }
+        .btn-full {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .section-header h2 {
+            margin: 0;
+            color: #1a1a2e;
+        }
+        .selected-parts-bar {
+            background: #f8f9fc;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .selected-parts-bar i {
+            color: #00d4ff;
+        }
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .builder-header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 20px;
+        }
+        .builder-header h2 {
+            font-size: 32px;
+            margin: 10px 0 5px 0;
+        }
+        .builder-header p {
+            color: #ccc;
+        }
+        .back-link {
+            color: #ccc;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: color 0.3s;
+        }
+        .back-link:hover {
+            color: #00d4ff;
+        }
+        .btn-outline {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            color: #555;
+        }
+        .btn-outline:hover {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+        .btn-primary {
+            padding: 10px 20px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            background: #00b8e6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+            position: relative;
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.3s;
+        }
+        .close-modal:hover {
+            color: #1a1a2e;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .modal-header i {
+            font-size: 24px;
+            color: #00d4ff;
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: #1a1a2e;
+        }
+        .modal-body {
+            color: #555;
+        }
+
+        /* AI Status */
+        .ai-status {
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f9fc;
+        }
+        .ai-status.compatible {
+            background: #e8f5e9;
+            border: 1px solid #4CAF50;
+        }
+        .ai-status.incompatible {
+            background: #ffebee;
+            border: 1px solid #f44336;
+        }
+        .ai-status.checking {
+            background: #e3f2fd;
+            border: 1px solid #2196F3;
+        }
+
+        @media (max-width: 768px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+            .sidebar {
+                position: static;
+            }
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+            .section-header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .section-header h2 {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -117,7 +484,7 @@
                 <section class="products-section">
                     <div class="section-header">
                         <h2>Select Components</h2>
-                        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;">
                             <button class="btn-primary" id="aiCheckBtn" onclick="window.runAICompatibility()" style="padding:8px 16px;font-size:13px;">
                                 <i class="fas fa-robot"></i> AI Check
                             </button>

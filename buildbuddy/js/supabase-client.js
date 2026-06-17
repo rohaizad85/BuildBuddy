@@ -1,3 +1,4 @@
+// D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\supabase-client.js
 import SUPABASE_CONFIG from '../config/config.js';
 
 class SupabaseClient {
@@ -9,6 +10,11 @@ class SupabaseClient {
             'Authorization': `Bearer ${this.anonKey}`,
             'Content-Type': 'application/json'
         };
+        
+        // Storage API
+        this.storage = {
+            from: (bucket) => new SupabaseStorageClient(bucket, this)
+        };
     }
 
     from(table) {
@@ -16,6 +22,90 @@ class SupabaseClient {
     }
 }
 
+// ===== STORAGE CLIENT =====
+class SupabaseStorageClient {
+    constructor(bucket, client) {
+        this.bucket = bucket;
+        this.client = client;
+        this.path = '';
+    }
+
+    // Get public URL for a file
+    getPublicUrl(path) {
+        const url = `${this.client.url}/storage/v1/object/public/${this.bucket}/${path}`;
+        return { data: { publicUrl: url } };
+    }
+
+    // List files in a folder
+    async list(path = '') {
+        const url = `${this.client.url}/storage/v1/object/list/${this.bucket}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',  // ✅ Must be POST for listing
+            headers: {
+                'apikey': this.client.anonKey,
+                'Authorization': `Bearer ${this.client.anonKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prefix: path })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return { data, error: null };
+    }
+
+    // Upload a file
+    async upload(path, file, options = {}) {
+        const url = `${this.client.url}/storage/v1/object/${this.bucket}/${path}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'apikey': this.client.anonKey,
+                'Authorization': `Bearer ${this.client.anonKey}`
+            },
+            body: file
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return { data, error: null };
+    }
+
+    // Delete a file
+    async remove(paths) {
+        const url = `${this.client.url}/storage/v1/object/${this.bucket}`;
+        
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'apikey': this.client.anonKey,
+                'Authorization': `Bearer ${this.client.anonKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(paths)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return { data, error: null };
+    }
+}
+
+// ===== QUERY BUILDER =====
 class SupabaseQueryBuilder {
     constructor(table, client) {
         this.table = table;
@@ -156,7 +246,6 @@ class SupabaseQueryBuilder {
         
         const data = await response.json();
         
-        // Handle single() - return first item or null
         if (this.singleResult) {
             if (Array.isArray(data) && data.length > 0) {
                 return data[0];
@@ -164,7 +253,6 @@ class SupabaseQueryBuilder {
             return null;
         }
         
-        // Handle maybeSingle() - return first item or null without error if multiple
         if (this.maybeSingleResult) {
             if (Array.isArray(data) && data.length > 0) {
                 return data[0];
@@ -232,10 +320,10 @@ class SupabaseQueryBuilder {
     }
 
     async executeDelete() {
-    if (this.filters.length === 0) {
-        throw new Error('DELETE requires a WHERE clause. Use .eq() before .delete()');
-    }
-    
+        if (this.filters.length === 0) {
+            throw new Error('DELETE requires a WHERE clause. Use .eq() before .delete()');
+        }
+        
         const url = this.buildFilterUrl();
         
         const response = await fetch(url, {
@@ -243,7 +331,6 @@ class SupabaseQueryBuilder {
             headers: this.client.headers
         });
         
-        // 204 No Content = successful delete with no body
         if (response.status === 204) {
             return { success: true };
         }
@@ -253,7 +340,6 @@ class SupabaseQueryBuilder {
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        // Only parse JSON if there's content
         const text = await response.text();
         return text ? JSON.parse(text) : { success: true };
     }

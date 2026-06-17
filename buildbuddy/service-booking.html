@@ -1,3 +1,4 @@
+<!-- D:\Ijad\Y3S2\FYP\Project\buildbuddy\service-booking.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -36,11 +37,16 @@
             margin-bottom: 10px;
         }
         
+        .booking-header p {
+            color: #666;
+        }
+        
         .service-summary {
             background: #f8f9fc;
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 30px;
+            border: 1px solid #e8ecf4;
         }
         
         .form-group {
@@ -52,6 +58,11 @@
             margin-bottom: 8px;
             color: #1a1a2e;
             font-weight: 500;
+        }
+        
+        .form-group label .required {
+            color: #f44336;
+            margin-left: 2px;
         }
         
         .form-group label i {
@@ -69,6 +80,7 @@
             border-radius: 8px;
             font-size: 14px;
             transition: all 0.3s;
+            font-family: inherit;
         }
         
         .form-group input:focus,
@@ -77,6 +89,13 @@
             outline: none;
             border-color: #00d4ff;
             box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+        
+        .form-group input:disabled,
+        .form-group textarea:disabled,
+        .form-group select:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
         }
         
         .form-row {
@@ -99,7 +118,7 @@
             margin-top: 20px;
         }
         
-        .btn-submit:hover {
+        .btn-submit:hover:not(:disabled) {
             background: #00b8e6;
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
@@ -108,6 +127,79 @@
         .btn-submit:disabled {
             background: #ccc;
             cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-primary {
+            display: inline-block;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background: #00b8e6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-outline {
+            display: inline-block;
+            padding: 12px 30px;
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            background: transparent;
+            color: #1a1a2e;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .btn-outline:hover {
+            background: #00d4ff10;
+        }
+        
+        .service-category {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .category-repair { background: #ffebee; color: #c62828; }
+        .category-assembly { background: #e3f2fd; color: #1565c0; }
+        .category-upgrade { background: #fff3e0; color: #e65100; }
+        .category-software { background: #e8f5e9; color: #2e7d32; }
+        .category-recovery { background: #f3e5f5; color: #6a1b9a; }
+        .category-maintenance { background: #fff8e1; color: #f57f17; }
+        
+        .booking-error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c62828;
+        }
+        
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .booking-card {
+                padding: 20px;
+            }
+            .service-summary {
+                padding: 15px;
+            }
         }
     </style>
 </head>
@@ -123,6 +215,9 @@
                 <a href="builder.html" class="nav-link">PC Builder</a>
                 <a href="prebuilt.html" class="nav-link">Pre-Built PCs</a>
                 <a href="service.html" class="nav-link active">Services</a>
+                <a href="staff/staff-dashboard.html" class="nav-link" id="staffNavLink" style="display: none;">
+                    <i class="fas fa-cog"></i> Staff
+                </a>
             </nav>
             <div class="header-actions">
                 <button class="cart-btn" onclick="window.location.href='cart.html'">
@@ -146,39 +241,43 @@
                     <p>Please provide your details for the service</p>
                 </div>
                 
-                <div id="serviceSummary" class="service-summary"></div>
+                <div id="serviceSummary" class="service-summary">
+                    <div style="text-align: center; color: #999; padding: 10px;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading service...
+                    </div>
+                </div>
                 
-                <form id="bookingForm" onsubmit="handleBooking(event)">
+                <form id="bookingForm">
                     <div class="form-row">
                         <div class="form-group">
-                            <label><i class="fas fa-user"></i> Full Name *</label>
-                            <input type="text" id="customerName" required>
+                            <label><i class="fas fa-user"></i> Full Name <span class="required">*</span></label>
+                            <input type="text" id="customerName" placeholder="Your full name" required>
                         </div>
                         <div class="form-group">
-                            <label><i class="fas fa-phone"></i> Contact Phone *</label>
-                            <input type="tel" id="contactPhone" required>
+                            <label><i class="fas fa-phone"></i> Contact Phone <span class="required">*</span></label>
+                            <input type="tel" id="contactPhone" placeholder="e.g., 012-3456789" required>
                         </div>
                     </div>
                     
                     <div class="form-group">
-                        <label><i class="fas fa-laptop"></i> Device Model *</label>
+                        <label><i class="fas fa-laptop"></i> Device Model <span class="required">*</span></label>
                         <input type="text" id="deviceModel" placeholder="e.g., Dell XPS 15, Custom PC, MacBook Pro" required>
                     </div>
                     
                     <div class="form-group">
-                        <label><i class="fas fa-exclamation-circle"></i> Issue Description *</label>
+                        <label><i class="fas fa-exclamation-circle"></i> Issue Description <span class="required">*</span></label>
                         <textarea id="deviceIssue" rows="3" placeholder="Describe the problem you're experiencing..." required></textarea>
                     </div>
                     
                     <div class="form-group">
-                        <label><i class="fas fa-map-marker-alt"></i> Address *</label>
+                        <label><i class="fas fa-map-marker-alt"></i> Address <span class="required">*</span></label>
                         <textarea id="address" rows="2" placeholder="Your full address for service" required></textarea>
                     </div>
                     
                     <div class="form-row">
                         <div class="form-group">
                             <label><i class="fas fa-calendar"></i> Preferred Date</label>
-                            <input type="date" id="preferredDate" min="">
+                            <input type="date" id="preferredDate">
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-clock"></i> Preferred Time</label>
@@ -203,6 +302,47 @@
             </div>
         </div>
     </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>BuildBuddy</h4>
+                    <p>Your trusted PC building companion since 2024.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="index.html">Home</a>
+                    <a href="builder.html">PC Builder</a>
+                    <a href="prebuilt.html">Pre-Built PCs</a>
+                    <a href="service.html">Services</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-phone"></i> +60 12-345 6789</p>
+                    <p><i class="fas fa-envelope"></i> support@buildbuddy.my</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function() {
+            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
+                        const staffLink = document.getElementById('staffNavLink');
+                        if (staffLink) staffLink.style.display = 'inline-block';
+                    }
+                } catch (e) {}
+            }
+        })();
+    </script>
 
     <script type="module" src="js/service-booking.js"></script>
 </body>

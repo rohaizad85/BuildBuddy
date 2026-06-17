@@ -1,5 +1,7 @@
+// D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\script.js
 import dataService from './data-service.js';
 import { getCartCount, updateCartCountDisplay, addToCart as addToCartUtil } from './cart-utils.js';
+import supabase from './supabase-client.js';
 
 let selectedParts = {
     cpu: null,
@@ -32,11 +34,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadInitialData() {
     try {
         showLoading(true);
-        inventoryData = await dataService.getInventory();
-        servicesData = await dataService.getServices();
-        console.log('Data loaded successfully');
+        
+        // Load both inventory and services
+        const [inventory, services] = await Promise.all([
+            dataService.getInventory(),
+            dataService.getServices()
+        ]);
+        
+        // Store the data
+        inventoryData = inventory || [];
+        servicesData = services || [];
+        
+        console.log('✅ Data loaded successfully');
+        console.log('📦 Inventory items:', inventoryData.length);
+        console.log('🔧 Services:', servicesData.length);
+        
+        // Log the Corsair item to verify
+        const corsair = inventoryData.find(p => p.i_name && p.i_name.includes('Corsair Vengeance 16GB'));
+        if (corsair) {
+            console.log('✅ Corsair Vengeance 16GB loaded:', corsair.i_image_path);
+        }
+        
+        // After data is loaded, initialize the page
+        if (isBuilderPage) {
+            initializeBuilderPage();
+        } else {
+            initializeHomePage();
+        }
+        
     } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('❌ Error loading data:', error);
         showError('Failed to load data. Please refresh the page.');
     } finally {
         showLoading(false);
@@ -88,6 +115,26 @@ function initializeBuilderPage() {
     updateBuildSummary();
 }
 
+function getProductImageUrl(imagePath) {
+    if (!imagePath) {
+        return null;
+    }
+    
+    // If it's already a full URL (placeholder), return it directly
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        return imagePath;
+    }
+    
+    // Construct the public URL directly
+    const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
+    const bucket = 'images';
+    
+    // Encode the filename for URL
+    const encodedPath = encodeURIComponent(imagePath);
+    return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodedPath}`;
+}
+
+// ===== RENDER PRODUCTS =====
 function renderProducts(category = 'all') {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
@@ -100,12 +147,25 @@ function renderProducts(category = 'all') {
     
     productsGrid.innerHTML = filteredProducts.map(product => {
         const isSelected = selectedParts[product.i_category] === product.i_id;
+        const imageUrl = getProductImageUrl(product.i_image_path);
+        
+        // Only try to load image if it's a valid URL (not a placeholder that might fail)
+        const shouldLoadImage = imageUrl && !imageUrl.includes('via.placeholder.com');
         
         return `
             <div class="product-card ${isSelected ? 'selected' : ''}" onclick="window.showProductDetail(${product.i_id})">
                 <span class="product-badge">${product.i_category.toUpperCase()}</span>
                 <div class="product-image">
-                    <i class="fas fa-${getIconForCategory(product.i_category)}"></i>
+                    ${shouldLoadImage ? `
+                        <img src="${imageUrl}" 
+                             alt="${product.i_name}"
+                             loading="lazy"
+                             onerror="this.style.display='none'; this.parentElement.querySelector('.placeholder-icon').style.display='flex';">
+                    ` : ''}
+                    <div class="placeholder-icon" style="${shouldLoadImage ? 'display: none;' : 'display: flex;'}">
+                        <i class="fas fa-${getIconForCategory(product.i_category)}"></i>
+                        <span>${product.i_category}</span>
+                    </div>
                 </div>
                 <h4>${product.i_name}</h4>
                 <div class="product-specs">${product.i_brand || ''}</div>
@@ -135,6 +195,7 @@ function getIconForCategory(category) {
     return icons[category] || 'box';
 }
 
+// ===== PRODUCT DETAIL MODAL =====
 window.showProductDetail = function(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
@@ -144,10 +205,20 @@ window.showProductDetail = function(productId) {
     if (!modal || !modalMessage) return;
     
     const isSelected = selectedParts[product.i_category] === product.i_id;
+    const imageUrl = getProductImageUrl(product.i_image_path);
+    const shouldLoadImage = imageUrl && !imageUrl.includes('via.placeholder.com');
     
     modalMessage.innerHTML = `
         <div style="text-align: center;">
-            <i class="fas fa-${getIconForCategory(product.i_category)}" style="font-size: 64px; color: #00d4ff; margin-bottom: 15px;"></i>
+            <div style="width: 150px; height: 150px; margin: 0 auto 15px; background: #f8f9fc; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative;">
+                ${shouldLoadImage ? `
+                    <img src="${imageUrl}" alt="${product.i_name}" style="width: 100%; height: 100%; object-fit: contain; padding: 15px;" onerror="this.style.display='none'; this.parentElement.querySelector('.modal-placeholder').style.display='flex';">
+                ` : ''}
+                <div class="modal-placeholder" style="${shouldLoadImage ? 'display: none;' : 'display: flex;'} flex-direction: column; align-items: center; color: #ccc;">
+                    <i class="fas fa-${getIconForCategory(product.i_category)}" style="font-size: 48px; color: #00d4ff;"></i>
+                    <span style="font-size: 12px; margin-top: 5px; color: #999;">${product.i_category}</span>
+                </div>
+            </div>
             <h3 style="margin-bottom: 5px;">${product.i_name}</h3>
             <span class="product-badge">${product.i_category.toUpperCase()}</span>
             <hr style="margin: 15px 0;">
@@ -195,7 +266,8 @@ function getServiceIcon(category) {
     return icons[category] || 'fa-wrench';
 }
 
-async function selectForBuild(productId) {
+// ===== SELECT FOR BUILD =====
+window.selectForBuild = async function(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
     
@@ -219,7 +291,7 @@ async function selectForBuild(productId) {
     updateSelectedPartsDisplay();
     updateBuildSummary();
     renderProducts(getCurrentCategory());
-}
+};
 
 function resetCompleteButton() {
     const btn = document.getElementById('completeBuildBtn');
@@ -345,7 +417,8 @@ window.removeFromBuild = function(category) {
     renderProducts(getCurrentCategory());
 };
 
-async function addToCart(productId) {
+// ===== ADD TO CART =====
+window.addToCart = async function(productId) {
     try {
         const product = inventoryData.find(p => p.i_id === productId);
         if (!product) return;
@@ -363,9 +436,9 @@ async function addToCart(productId) {
         console.error('Error adding to cart:', error);
         showError('Failed to add item to cart');
     }
-}
+};
 
-async function bookService(serviceId) {
+window.bookService = async function(serviceId) {
     try {
         const service = servicesData.find(s => s.service_id === serviceId);
         if (!service) return;
@@ -383,7 +456,7 @@ async function bookService(serviceId) {
         console.error('Error booking service:', error);
         showError('Failed to book service');
     }
-}
+};
 
 function getCurrentCategory() {
     const activeCategory = document.querySelector('.category-item.active');
@@ -495,7 +568,35 @@ function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff98
     }
 }
 
-// ===== AI COMPATIBILITY CHECK (BUTTON TRIGGERED) =====
+// ===== SORTING =====
+let currentSort = 'default';
+
+function sortProducts(products) {
+    const sorted = [...products];
+    switch (currentSort) {
+        case 'name-az': return sorted.sort((a, b) => (a.i_name || '').localeCompare(b.i_name || ''));
+        case 'name-za': return sorted.sort((a, b) => (b.i_name || '').localeCompare(a.i_name || ''));
+        case 'price-low': return sorted.sort((a, b) => parseFloat(a.i_price) - parseFloat(b.i_price));
+        case 'price-high': return sorted.sort((a, b) => parseFloat(b.i_price) - parseFloat(a.i_price));
+        case 'stock-high': return sorted.sort((a, b) => (b.i_quantity || 0) - (a.i_quantity || 0));
+        case 'stock-low': return sorted.sort((a, b) => (a.i_quantity || 0) - (b.i_quantity || 0));
+        case 'brand-az': return sorted.sort((a, b) => (a.i_brand || '').localeCompare(b.i_brand || ''));
+        default: return sorted;
+    }
+}
+
+window.setSort = function(sortType) {
+    currentSort = sortType;
+    document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
+    document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
+    renderProducts(getCurrentCategory());
+};
+
+window.selectBuilderCategory = function(category) {
+    renderProducts(category);
+};
+
+// ===== AI COMPATIBILITY CHECK =====
 window.runAICompatibility = async function() {
     const parts = [];
     for (const cat in selectedParts) {
@@ -505,7 +606,6 @@ window.runAICompatibility = async function() {
         }
     }
     
-    // Error handling with sleek popups
     if (parts.length === 0) {
         showPopup(
             'No Components Selected',
@@ -669,36 +769,270 @@ function getPartRole(cat) {
     return roles[(cat || '').toLowerCase()] || 'PC component';
 }
 
-// ===== SORTING =====
-let currentSort = 'default';
+console.log('✅ script.js loaded successfully');
 
-function sortProducts(products) {
-    const sorted = [...products];
-    switch (currentSort) {
-        case 'name-az': return sorted.sort((a, b) => (a.i_name || '').localeCompare(b.i_name || ''));
-        case 'name-za': return sorted.sort((a, b) => (b.i_name || '').localeCompare(a.i_name || ''));
-        case 'price-low': return sorted.sort((a, b) => parseFloat(a.i_price) - parseFloat(b.i_price));
-        case 'price-high': return sorted.sort((a, b) => parseFloat(b.i_price) - parseFloat(a.i_price));
-        case 'stock-high': return sorted.sort((a, b) => (b.i_quantity || 0) - (a.i_quantity || 0));
-        case 'stock-low': return sorted.sort((a, b) => (a.i_quantity || 0) - (b.i_quantity || 0));
-        case 'brand-az': return sorted.sort((a, b) => (a.i_brand || '').localeCompare(b.i_brand || ''));
-        default: return sorted;
+// ===== EXPOSE FUNCTIONS GLOBALLY =====
+window.getProductImageUrl = getProductImageUrl;
+window.inventoryData = inventoryData;
+
+// ===== DEBUG FUNCTIONS =====
+
+// Debug function for checking images
+window.debugImages = async function() {
+    try {
+        // Check if supabase is available
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase is not defined! Make sure it\'s imported.');
+            return;
+        }
+        
+        console.log('🔍 Checking images in bucket...');
+        
+        // Use the correct storage syntax
+        const { data, error } = await supabase
+            .storage
+            .from('images')
+            .list('');
+        
+        if (error) {
+            console.error('❌ Error listing bucket:', error);
+            console.log('💡 Make sure the "images" bucket exists and is public.');
+            return;
+        }
+        
+        if (!data || data.length === 0) {
+            console.log('📁 No files found in "images" bucket.');
+            return;
+        }
+        
+        console.log(`📁 Found ${data.length} files in "images" bucket:`);
+        data.forEach(file => {
+            console.log(`   📷 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+        });
+        
+        // Check if inventoryData is available
+        if (!inventoryData || inventoryData.length === 0) {
+            console.warn('⚠️ No inventory data loaded. Run loadInitialData() first.');
+            return data;
+        }
+        
+        // Check each inventory item against the bucket
+        console.log('\n🔍 Checking inventory items:');
+        const itemsWithImages = inventoryData.filter(p => p.i_image_path && !p.i_image_path.startsWith('http'));
+        
+        if (itemsWithImages.length === 0) {
+            console.log('ℹ️ No items with image paths found.');
+            return data;
+        }
+        
+        const bucketFiles = data.map(f => f.name);
+        let foundCount = 0;
+        let missingItems = [];
+        
+        for (const item of itemsWithImages) {
+            const filename = item.i_image_path;
+            const exists = bucketFiles.includes(filename);
+            
+            if (exists) {
+                foundCount++;
+                console.log(`   ✅ ${item.i_name}: ${filename}`);
+            } else {
+                missingItems.push(item);
+                console.log(`   ❌ ${item.i_name}: ${filename} (NOT FOUND)`);
+                
+                // Suggest possible matches
+                const searchTerm = item.i_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const suggestions = data.filter(f => {
+                    const fName = f.name.toLowerCase().replace(/\.[^.]+$/, '').replace(/[^a-z0-9]/g, '');
+                    return fName.includes(searchTerm) || searchTerm.includes(fName);
+                });
+                
+                if (suggestions.length > 0) {
+                    console.log(`      💡 Did you mean: ${suggestions.map(s => s.name).join(', ')}`);
+                }
+            }
+        }
+        
+        console.log(`\n📊 Summary: ${foundCount}/${itemsWithImages.length} images found`);
+        
+        if (missingItems.length > 0) {
+            console.log('\n🔧 To fix missing images, run this SQL:');
+            console.log('-- Update each missing image with the correct filename');
+            missingItems.forEach(item => {
+                console.log(`UPDATE public.inventory SET i_image_path = 'correct-filename.jpg' WHERE i_id = ${item.i_id};`);
+            });
+        }
+        
+        return data;
+        
+    } catch (error) {
+        console.error('❌ Error in debugImages:', error);
+        console.log('💡 Make sure you\'re on the builder page with inventory loaded.');
     }
-}
-
-window.setSort = function(sortType) {
-    currentSort = sortType;
-    document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
-    document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
-    renderProducts(getCurrentCategory());
 };
 
-window.selectBuilderCategory = function(category) {
-    renderProducts(category);
+// Quick image check function
+window.checkImage = async function(filename) {
+    try {
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase is not defined!');
+            return false;
+        }
+        
+        // Use the correct storage syntax
+        const { data } = supabase
+            .storage
+            .from('images')
+            .getPublicUrl(filename);
+        
+        const url = data.publicUrl;
+        
+        console.log(`📷 Checking: ${filename}`);
+        console.log(`🔗 URL: ${url}`);
+        
+        const response = await fetch(url, { method: 'HEAD' });
+        console.log(`   ${response.ok ? '✅ EXISTS' : '❌ NOT FOUND'} (Status: ${response.status})`);
+        
+        return response.ok;
+    } catch (error) {
+        console.error(`❌ Error checking ${filename}:`, error);
+        return false;
+    }
 };
 
-// Expose functions globally
-window.addToCart = addToCart;
-window.selectForBuild = selectForBuild;
-window.bookService = bookService;
-window.showProductDetail = window.showProductDetail;
+// List all images in bucket
+window.listImages = async function() {
+    try {
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase is not defined!');
+            return;
+        }
+        
+        // Use the correct storage syntax
+        const { data, error } = await supabase
+            .storage
+            .from('images')
+            .list('');
+        
+        if (error) {
+            console.error('❌ Error listing bucket:', error);
+            return;
+        }
+        
+        if (!data || data.length === 0) {
+            console.log('📁 No images found in bucket.');
+            return [];
+        }
+        
+        console.log(`📁 ${data.length} images in bucket:`);
+        data.forEach(f => console.log(`   📷 ${f.name}`));
+        return data;
+    } catch (error) {
+        console.error('❌ Error:', error);
+    }
+};
+
+// Check all images for a specific category
+window.checkCategoryImages = async function(category) {
+    try {
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase is not defined!');
+            return;
+        }
+        
+        if (!inventoryData || inventoryData.length === 0) {
+            console.warn('⚠️ No inventory data loaded.');
+            return;
+        }
+        
+        const items = inventoryData.filter(p => 
+            p.i_category === category && 
+            p.i_image_path && 
+            !p.i_image_path.startsWith('http')
+        );
+        
+        if (items.length === 0) {
+            console.log(`ℹ️ No items with images found in category: ${category}`);
+            return;
+        }
+        
+        console.log(`🔍 Checking ${items.length} items in category "${category}":`);
+        
+        for (const item of items) {
+            await window.checkImage(item.i_image_path);
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+    }
+};
+
+// Fix image path for a specific item
+window.fixImagePath = async function(itemId, correctFilename) {
+    try {
+        // Check if the image exists first
+        const exists = await window.checkImage(correctFilename);
+        
+        if (!exists) {
+            console.warn(`⚠️ Warning: ${correctFilename} does not exist in the bucket.`);
+            const confirm = window.confirm(`"${correctFilename}" doesn't exist. Do you want to update anyway?`);
+            if (!confirm) return;
+        }
+        
+        // Update the database
+        const { data, error } = await supabase
+            .from('inventory')
+            .update({ i_image_path: correctFilename })
+            .eq('i_id', itemId)
+            .select();
+        
+        if (error) {
+            console.error('❌ Error updating database:', error);
+            return;
+        }
+        
+        console.log(`✅ Updated item ${itemId} to use: ${correctFilename}`);
+        
+        // Refresh inventory data
+        inventoryData = await dataService.getInventory();
+        renderProducts(getCurrentCategory());
+        
+        return data;
+    } catch (error) {
+        console.error('❌ Error:', error);
+    }
+};
+
+// Upload a file to the bucket (for debugging)
+window.uploadTestImage = async function(file, filename) {
+    try {
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase is not defined!');
+            return;
+        }
+        
+        const { data, error } = await supabase
+            .storage
+            .from('images')
+            .upload(filename, file, {
+                cacheControl: '3600',
+                upsert: true
+            });
+        
+        if (error) {
+            console.error('❌ Error uploading:', error);
+            return;
+        }
+        
+        console.log(`✅ Uploaded: ${filename}`);
+        return data;
+    } catch (error) {
+        console.error('❌ Error:', error);
+    }
+};
+
+console.log('✅ Debug functions loaded. Run:');
+console.log('   await window.listImages() - List all images in bucket');
+console.log('   await window.debugImages() - Check all inventory items against bucket');
+console.log('   await window.checkImage("filename.jpg") - Check a specific image');
+console.log('   await window.checkCategoryImages("cpu") - Check images for a category');
+console.log('   await window.fixImagePath(itemId, "correct-filename.jpg") - Fix a specific item');
