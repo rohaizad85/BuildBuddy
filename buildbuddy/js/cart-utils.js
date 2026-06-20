@@ -177,8 +177,22 @@ export function setupLoginButton() {
     const loginBtnText = document.getElementById('loginBtnText');
     
     if (user && loginBtn && loginBtnText) {
-        loginBtnText.textContent = user.name.split(' ')[0];
-        loginBtn.onclick = () => window.location.href = 'profile.html';
+        // Fix: Check multiple possible name fields
+        const displayName = user.full_name || user.name || user.user_name || user.username || 'User';
+        // Safely get first name
+        const firstName = displayName ? displayName.split(' ')[0] : 'User';
+        loginBtnText.textContent = firstName;
+        
+        // Set up click handler based on role
+        loginBtn.onclick = () => {
+            if (user.role === 'ADMIN') {
+                window.location.href = 'admin/admin-dashboard.html';
+            } else if (user.role === 'STAFF') {
+                window.location.href = 'staff/staff-dashboard.html';
+            } else {
+                window.location.href = 'profile.html';
+            }
+        };
     } else if (loginBtn) {
         loginBtn.onclick = () => window.location.href = 'auth.html';
         if (loginBtnText) {

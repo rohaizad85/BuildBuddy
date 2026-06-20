@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
+
 <body>
     <header class="header">
         <div class="container">
@@ -60,7 +62,8 @@
                             <i class="fas fa-cogs"></i>
                         </div>
                         <h3>Build Custom PC</h3>
-                        <p>Select individual components with our AI-powered compatibility checker. Perfect for enthusiasts and beginners alike.</p>
+                        <p>Select individual components with our AI-powered compatibility checker. Perfect for
+                            enthusiasts and beginners alike.</p>
                         <ul class="option-features">
                             <li><i class="fas fa-check-circle"></i> AI compatibility checking</li>
                             <li><i class="fas fa-check-circle"></i> Real-time price calculation</li>
@@ -75,7 +78,8 @@
                             <i class="fas fa-desktop"></i>
                         </div>
                         <h3>Pre-Built PCs</h3>
-                        <p>Ready-to-ship systems optimized for gaming, work, or everyday use. Tested and guaranteed to work perfectly.</p>
+                        <p>Ready-to-ship systems optimized for gaming, work, or everyday use. Tested and guaranteed to
+                            work perfectly.</p>
                         <ul class="option-features">
                             <li><i class="fas fa-check-circle"></i> Plug and play</li>
                             <li><i class="fas fa-check-circle"></i> 3-year warranty</li>
@@ -89,7 +93,8 @@
                             <i class="fas fa-screwdriver-wrench"></i>
                         </div>
                         <h3>Services Only</h3>
-                        <p>Need repair, maintenance, or assembly? Book our expert technicians for any computer-related service.</p>
+                        <p>Need repair, maintenance, or assembly? Book our expert technicians for any computer-related
+                            service.</p>
                         <ul class="option-features">
                             <li><i class="fas fa-check-circle"></i> Same-day service</li>
                             <li><i class="fas fa-check-circle"></i> Certified technicians</li>
@@ -171,18 +176,19 @@
 
     <!-- Cart count + user login handling -->
     <script>
-        (function() {
+        (function () {
             const savedCart = localStorage.getItem('buildbuddy_cart');
             const count = savedCart ? JSON.parse(savedCart).length : 0;
             document.querySelectorAll('.cart-count').forEach(el => el.textContent = count);
-            
+
             const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
             const loginBtnText = document.getElementById('loginBtnText');
             const loginBtn = document.getElementById('loginBtn');
-            
+
             if (user && loginBtnText && loginBtn) {
                 const userData = JSON.parse(user);
-                loginBtnText.textContent = userData.name ? userData.name.split(' ')[0] : userData.full_name ? userData.full_name.split(' ')[0] : 'User';
+                const displayName = userData.full_name || userData.name || 'User';
+                loginBtnText.textContent = displayName.split(' ')[0];
                 loginBtn.onclick = () => {
                     if (userData.role === 'ADMIN') {
                         window.location.href = 'admin/admin-dashboard.html';
@@ -195,8 +201,7 @@
             } else if (loginBtn) {
                 loginBtn.onclick = () => window.location.href = 'auth.html';
             }
-            
-            // Show staff link for STAFF/ADMIN users
+
             if (user) {
                 try {
                     const userData = JSON.parse(user);
@@ -204,7 +209,7 @@
                         const staffLink = document.getElementById('staffNavLink');
                         if (staffLink) staffLink.style.display = 'inline-block';
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         })();
     </script>
@@ -213,78 +218,102 @@
         import supabase from './js/supabase-client.js';
         import { initCart, updateCartCountDisplay } from './js/cart-utils.js';
 
-        // Load featured pre-built PCs
+        // ===== GET PRODUCT IMAGE URL =====
+        function getProductImageUrl(imagePath) {
+            if (!imagePath) return null;
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                return imagePath;
+            }
+            const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
+            return `${SUPABASE_URL}/storage/v1/object/public/images/${encodeURIComponent(imagePath)}`;
+        }
+
+        // ===== LOAD FEATURED PRE-BUILTS =====
         async function loadFeaturedPrebuilts() {
             const grid = document.getElementById('featuredPrebuildGrid');
-            
+            if (!grid) return;
+
             try {
-                const bundles = await supabase
+                const result = await supabase
                     .from('bundles')
                     .select('*')
                     .order('bundle_price')
                     .limit(3);
-                
-                if (!bundles || bundles.length === 0) {
+
+                // FIX: Handle the response correctly - result.data is the array
+                const bundles = result?.data || [];
+                console.log('📦 Bundles loaded:', bundles.length);
+
+                if (bundles.length === 0) {
                     grid.innerHTML = `
                         <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
                             <i class="fas fa-box-open" style="font-size: 40px; color: #ccc;"></i>
                             <p style="margin-top: 20px; color: #666;">No pre-built PCs available yet.</p>
+                            <p style="font-size: 13px; color: #999;">Check back soon!</p>
                         </div>
                     `;
                     return;
                 }
-                
+
                 grid.innerHTML = bundles.map(bundle => {
                     const badgeClass = getBadgeClass(bundle.bundle_category);
                     const specs = bundle.bundle_specs || {};
-                    
+                    const imageUrl = getProductImageUrl(bundle.bundle_image_path);
+
                     return `
                         <div class="prebuild-card" onclick="window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">
                             <div class="prebuild-badge ${badgeClass}">${bundle.bundle_category || 'Standard'}</div>
                             <div class="prebuild-image">
-                                <i class="fas fa-computer"></i>
+                                ${imageUrl ?
+                            `<img src="${imageUrl}" alt="${bundle.bundle_name || 'PC'}" style="width:100%;height:100%;object-fit:contain;padding:20px;" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\\'fas fa-computer\\' style=\\'font-size:48px;color:#00d4ff;\\'></i>'">` :
+                            `<i class="fas fa-computer" style="font-size:48px;color:#00d4ff;"></i>`
+                        }
                             </div>
-                            <h3>${bundle.bundle_name}</h3>
+                            <h3>${bundle.bundle_name || 'Custom PC'}</h3>
                             <div class="prebuild-specs">
                                 ${specs.cpu ? `<span>${specs.cpu}</span>` : ''}
                                 ${specs.ram ? `<span>${specs.ram}</span>` : ''}
                                 ${specs.gpu ? `<span>${specs.gpu}</span>` : ''}
                                 ${specs.storage ? `<span>${specs.storage}</span>` : ''}
                             </div>
-                            <div class="prebuild-price">RM ${parseFloat(bundle.bundle_price).toLocaleString()}</div>
+                            <div class="prebuild-price">RM ${parseFloat(bundle.bundle_price || 0).toLocaleString()}</div>
                             <button class="btn-outline" onclick="event.stopPropagation(); window.location.href='prebuilt-detail.html?id=${bundle.bundle_id}'">View Details</button>
                         </div>
                     `;
                 }).join('');
-                
+
             } catch (error) {
                 console.error('Error loading featured prebuilts:', error);
                 grid.innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center; padding: 40px;">
                         <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #f44336;"></i>
                         <p style="margin-top: 20px; color: #666;">Failed to load pre-built PCs.</p>
+                        <button onclick="location.reload()" style="margin-top:10px;padding:8px 20px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Retry</button>
                     </div>
                 `;
             }
         }
-        
+
         function getBadgeClass(category) {
             const classes = {
                 'beginner': 'beginner',
                 'gaming': 'popular',
                 'elite': 'elite',
                 'budget': 'beginner',
-                'creator': 'elite'
+                'creator': 'elite',
+                'standard': 'beginner'
             };
             return classes[category] || 'beginner';
         }
-        
+
         document.addEventListener('DOMContentLoaded', async () => {
             await initCart();
-            loadFeaturedPrebuilts();
+            await loadFeaturedPrebuilts();
+            await updateCartCountDisplay();
         });
     </script>
 
     <script type="module" src="js/script.js"></script>
 </body>
+
 </html>

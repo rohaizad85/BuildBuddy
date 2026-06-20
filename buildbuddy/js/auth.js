@@ -1,24 +1,26 @@
+// D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\auth.js
+
 import supabase from './supabase-client.js';
 import { syncLocalCartToDatabase, updateCartCountDisplay, clearCartOnLogout } from './cart-utils.js';
 
-// Tab switching
+// ============================================
+// TAB SWITCHING
+// ============================================
+
 document.querySelectorAll('.auth-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         const tabName = tab.dataset.tab;
-        
-        // Update tabs
+
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        
-        // Update forms
+
         document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
         document.getElementById(`${tabName}Form`).classList.add('active');
-        
-        // Update header and footer
+
         const header = document.querySelector('.auth-header');
         const footerText = document.getElementById('footerText');
         const switchLink = document.getElementById('switchToRegister');
-        
+
         if (tabName === 'login') {
             header.innerHTML = `
                 <i class="fas fa-microchip"></i>
@@ -38,22 +40,24 @@ document.querySelectorAll('.auth-tab').forEach(tab => {
             switchLink.textContent = 'Sign In';
             switchLink.onclick = () => switchTab('login');
         }
-        
-        // Clear messages
+
         clearMessages();
     });
 });
 
-// Switch tab function
-window.switchTab = function(tabName) {
-    document.querySelector(`.auth-tab[data-tab="${tabName}"]`).click();
+window.switchTab = function (tabName) {
+    const tab = document.querySelector(`.auth-tab[data-tab="${tabName}"]`);
+    if (tab) tab.click();
 };
 
-// Toggle password visibility
-window.togglePassword = function(inputId, button) {
+// ============================================
+// PASSWORD VISIBILITY
+// ============================================
+
+window.togglePassword = function (inputId, button) {
     const input = document.getElementById(inputId);
     const icon = button.querySelector('i');
-    
+
     if (input.type === 'password') {
         input.type = 'text';
         icon.classList.remove('fa-eye');
@@ -65,7 +69,10 @@ window.togglePassword = function(inputId, button) {
     }
 };
 
-// Clear messages
+// ============================================
+// MESSAGE HANDLING
+// ============================================
+
 function clearMessages() {
     document.querySelectorAll('.error-message, .success-message').forEach(el => {
         el.style.display = 'none';
@@ -73,7 +80,6 @@ function clearMessages() {
     });
 }
 
-// Show error
 function showError(formType, message) {
     const errorEl = document.getElementById(`${formType}Error`);
     if (errorEl) {
@@ -83,7 +89,6 @@ function showError(formType, message) {
     }
 }
 
-// Show success
 function showSuccess(formType, message) {
     const successEl = document.getElementById(`${formType}Success`);
     if (successEl) {
@@ -93,7 +98,10 @@ function showSuccess(formType, message) {
     }
 }
 
-// Simple hash function
+// ============================================
+// PASSWORD HASHING
+// ============================================
+
 async function hashPassword(password) {
     const encoder = new TextEncoder();
     const data = encoder.encode(password);
@@ -103,70 +111,79 @@ async function hashPassword(password) {
         .join('');
 }
 
-// Handle Login
-window.handleLogin = async function(event) {
+// ============================================
+// LOGIN HANDLER - FIXED
+// ============================================
+
+window.handleLogin = async function (event) {
     event.preventDefault();
     clearMessages();
-    
+
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const rememberMe = document.getElementById('rememberMe').checked;
     const btn = document.getElementById('loginBtnSubmit');
-    
+
     btn.disabled = true;
     btn.innerHTML = '<span class="loading-spinner-small"></span> Signing in...';
-    
+
     try {
         const passwordHash = await hashPassword(password);
-        
-        const user = await supabase
+
+        const { data: user, error } = await supabase
             .from('users')
             .select('*')
             .eq('email', email)
             .eq('password_hash', passwordHash)
             .single();
-        
-        if (!user) {
+
+        if (error || !user) {
             throw new Error('Invalid email or password');
         }
-        
+
         // Update last login
         await supabase
             .from('users')
             .update({ last_login: new Date().toISOString() })
             .eq('user_id', user.user_id);
-        
-        // Store user info with role
+
+        // Store user info
         const userData = {
             id: user.user_id,
-            name: user.full_name,
+            user_id: user.user_id,
+            name: user.full_name || user.name || 'User',
+            full_name: user.full_name || user.name || 'User',
             email: user.email,
             role: user.role || 'USER'
         };
-        
+
         if (rememberMe) {
             localStorage.setItem('buildbuddy_user', JSON.stringify(userData));
         } else {
             sessionStorage.setItem('buildbuddy_user', JSON.stringify(userData));
         }
-        
-        // Sync local cart to database after successful login
+
+        // Sync local cart
         await syncLocalCartToDatabase();
         await updateCartCountDisplay();
-        
-        showSuccess('login', 'Login successful! Redirecting...');
-        
-        // Redirect based on role
+
+        showSuccess('login', `Welcome back, ${userData.full_name}! Redirecting...`);
+
+        // FIXED: Use the correct path for admin dashboard
         setTimeout(() => {
+            console.log('🔄 Redirecting with role:', userData.role);
             if (userData.role === 'ADMIN') {
+                console.log('➡️ Redirecting to admin dashboard');
                 window.location.href = 'admin/admin-dashboard.html';
             } else if (userData.role === 'STAFF') {
+                console.log('➡️ Redirecting to staff dashboard');
                 window.location.href = 'staff/staff-dashboard.html';
             } else {
+                console.log('➡️ Redirecting to home page');
                 window.location.href = 'index.html';
             }
         }, 1500);
-        
+
     } catch (error) {
         showError('login', error.message);
         btn.disabled = false;
@@ -174,11 +191,14 @@ window.handleLogin = async function(event) {
     }
 };
 
-// Handle Register
-window.handleRegister = async function(event) {
+// ============================================
+// REGISTER HANDLER
+// ============================================
+
+window.handleRegister = async function (event) {
     event.preventDefault();
     clearMessages();
-    
+
     const name = document.getElementById('registerName').value;
     const email = document.getElementById('registerEmail').value;
     const phone = document.getElementById('registerPhone').value;
@@ -186,120 +206,130 @@ window.handleRegister = async function(event) {
     const confirmPassword = document.getElementById('registerConfirmPassword').value;
     const agreeTerms = document.getElementById('agreeTerms').checked;
     const btn = document.getElementById('registerBtn');
-    
-    // Validation
+
     if (password !== confirmPassword) {
         showError('register', 'Passwords do not match');
         return;
     }
-    
+
     if (password.length < 6) {
         showError('register', 'Password must be at least 6 characters');
         return;
     }
-    
+
     if (!agreeTerms) {
         showError('register', 'Please agree to the Terms & Conditions');
         return;
     }
-    
+
     btn.disabled = true;
     btn.innerHTML = '<span class="loading-spinner-small"></span> Creating account...';
-    
+
     try {
-        // Check if email exists
-        const existingUser = await supabase
+        const { data: existingUser } = await supabase
             .from('users')
             .select('email')
             .eq('email', email)
             .single();
-        
+
         if (existingUser) {
             throw new Error('Email already registered');
         }
-        
+
         const passwordHash = await hashPassword(password);
-        
-        const newUser = await supabase
+
+        const { data: newUser, error } = await supabase
             .from('users')
             .insert({
                 full_name: name,
                 email: email,
                 phone: phone || null,
                 password_hash: passwordHash,
-                role: 'USER'  // Default role for new registrations
+                role: 'USER'
             })
             .select()
             .single();
-        
-        if (!newUser) {
-            throw new Error('Failed to create account');
+
+        if (error || !newUser) {
+            throw new Error(error?.message || 'Failed to create account');
         }
-        
+
         showSuccess('register', 'Account created successfully! You can now login.');
-        
-        // Clear form
+
         document.getElementById('registerName').value = '';
         document.getElementById('registerEmail').value = '';
         document.getElementById('registerPhone').value = '';
         document.getElementById('registerPassword').value = '';
         document.getElementById('registerConfirmPassword').value = '';
         document.getElementById('agreeTerms').checked = false;
-        
+
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
-        
-        // Switch to login after 2 seconds
+
         setTimeout(() => {
             switchTab('login');
             document.getElementById('loginEmail').value = email;
         }, 2000);
-        
+
     } catch (error) {
         let errorMessage = error.message;
-        
         if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
             errorMessage = 'Email already registered';
         } else if (error.message.includes('violates row-level security')) {
-            errorMessage = 'Permission denied. Please run the RLS fix SQL.';
+            errorMessage = 'Permission denied. Please contact support.';
         }
-        
         showError('register', errorMessage);
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
     }
 };
 
-// Social login (placeholder)
-window.socialLogin = function(provider) {
+// ============================================
+// SOCIAL LOGIN (placeholder)
+// ============================================
+
+window.socialLogin = function (provider) {
     showError('login', `${provider} login coming soon!`);
 };
 
-// Handle Logout
-window.handleLogout = function() {
+// ============================================
+// LOGOUT
+// ============================================
+
+window.handleLogout = function () {
     clearCartOnLogout();
     localStorage.removeItem('buildbuddy_user');
     sessionStorage.removeItem('buildbuddy_user');
     window.location.href = 'index.html';
 };
 
-// Check if user is logged in
+// ============================================
+// CHECK AUTH
+// ============================================
+
 function checkAuth() {
     const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
     const loginBtn = document.querySelector('.login-btn');
     const loginBtnText = document.getElementById('loginBtnText');
-    
+
     if (user && loginBtn && loginBtnText) {
-        const userData = JSON.parse(user);
-        loginBtnText.textContent = userData.name.split(' ')[0];
-        
-        // Check role for correct redirect
-        if (userData.role === 'ADMIN') {
-            loginBtn.onclick = () => window.location.href = 'admin/admin-dashboard.html';
-        } else if (userData.role === 'STAFF') {
-            loginBtn.onclick = () => window.location.href = 'staff/staff-dashboard.html';
-        } else {
-            loginBtn.onclick = () => window.location.href = 'profile.html';
+        try {
+            const userData = JSON.parse(user);
+            const displayName = userData.full_name || userData.name || 'User';
+            loginBtnText.textContent = displayName.split(' ')[0];
+
+            // FIXED: Use correct paths for redirect
+            if (userData.role === 'ADMIN') {
+                loginBtn.onclick = () => window.location.href = 'admin/admin-dashboard.html';
+            } else if (userData.role === 'STAFF') {
+                loginBtn.onclick = () => window.location.href = 'staff/staff-dashboard.html';
+            } else {
+                loginBtn.onclick = () => window.location.href = 'profile.html';
+            }
+        } catch (e) {
+            console.error('Error parsing user data:', e);
+            loginBtn.onclick = () => window.location.href = 'auth.html';
+            if (loginBtnText) loginBtnText.textContent = 'Login';
         }
     } else if (loginBtn) {
         loginBtn.onclick = () => window.location.href = 'auth.html';
@@ -307,19 +337,24 @@ function checkAuth() {
     }
 }
 
-// Update cart count
+// ============================================
+// UPDATE CART COUNT
+// ============================================
+
 async function updateCartCount() {
     const count = await updateCartCountDisplay();
     const cartCounts = document.querySelectorAll('.cart-count');
     cartCounts.forEach(el => el.textContent = count);
 }
 
-// Initialize
+// ============================================
+// INITIALIZE
+// ============================================
+
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
     updateCartCount();
-    
-    // Set up switch link
+
     const switchLink = document.getElementById('switchToRegister');
     if (switchLink) {
         switchLink.onclick = (e) => {
@@ -327,7 +362,8 @@ document.addEventListener('DOMContentLoaded', () => {
             switchTab('register');
         };
     }
+
+    console.log('✅ Auth page initialized');
 });
 
-// Export for use in other files
 export { checkAuth, updateCartCount };

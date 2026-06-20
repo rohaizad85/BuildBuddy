@@ -7,31 +7,446 @@
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/admin-style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* ============================================
+           LOADING OVERLAY
+           ============================================ */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0f0f1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+        }
+        .loading-overlay .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .loading-overlay p {
+            margin-top: 20px;
+            color: #888;
+            font-size: 14px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ============================================
+           IMAGE UPLOAD PREVIEW
+           ============================================ */
+        .image-upload-preview {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .image-upload-preview:hover {
+            border-color: #00d4ff !important;
+            box-shadow: 0 0 0 4px rgba(0,212,255,0.1);
+        }
+        .image-upload-preview.has-image {
+            border-color: #4CAF50;
+            border-style: solid;
+        }
+        .remove-image {
+            transition: all 0.2s;
+        }
+        .remove-image:hover {
+            transform: scale(1.1);
+            background: #d32f2f !important;
+        }
+
+        /* ============================================
+           IMAGE CONFLICT DIALOG
+           ============================================ */
+        .image-conflict-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+        .image-conflict-dialog {
+            background: white;
+            border-radius: 20px;
+            padding: 35px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+        .image-conflict-dialog .icon-circle {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: #fff3e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+        }
+        .image-conflict-dialog .icon-circle i {
+            font-size: 32px;
+            color: #ff9800;
+        }
+        .image-conflict-dialog h3 {
+            color: #1a1a2e;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        /* ============================================
+           STAFF ASSIGNMENT SECTION
+           ============================================ */
+        .staff-assignment-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #f0f0f5;
+        }
+        .staff-assignment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .staff-assignment-header h3 {
+            color: #1a1a2e;
+            margin: 0;
+            font-size: 18px;
+        }
+        .staff-assignment-header h3 i {
+            color: #00d4ff;
+            margin-right: 10px;
+        }
+        .staff-assignment-header .subtitle {
+            color: #888;
+            font-size: 13px;
+            margin: 5px 0 0 0;
+        }
+        .staff-assignment-empty {
+            text-align: center;
+            padding: 40px;
+            background: #f8f9fc;
+            border-radius: 12px;
+            border: 2px dashed #e0e0e0;
+        }
+        .staff-assignment-empty i {
+            font-size: 48px;
+            color: #4CAF50;
+        }
+        .staff-assignment-empty h4 {
+            color: #1a1a2e;
+            margin: 15px 0 5px;
+        }
+        .staff-assignment-empty p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* ============================================
+           STAFF TABLE
+           ============================================ */
+        .staff-table-wrapper {
+            background: white;
+            border-radius: 12px;
+            overflow: visible !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .staff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            overflow: visible !important;
+        }
+        .staff-table thead tr {
+            background: #f8f9fc;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .staff-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .staff-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f5;
+            vertical-align: middle;
+        }
+        .staff-table tbody tr {
+            transition: background 0.15s;
+        }
+        .staff-table tbody tr:hover {
+            background: #fafbfc;
+        }
+        .staff-footer {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #888;
+            font-size: 13px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* ============================================
+           SEARCHABLE STAFF DROPDOWN
+           ============================================ */
+        .staff-dropdown {
+            position: relative;
+            min-width: 180px;
+            z-index: 1000;
+        }
+        .staff-search-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .staff-search-input:focus {
+            border-color: #00d4ff;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+        }
+        .staff-search-input::placeholder {
+            color: #999;
+            font-size: 12px;
+        }
+        .staff-dropdown-list {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 9999 !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            min-width: 200px;
+        }
+        .staff-dropdown-item {
+            padding: 9px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #333;
+            border-bottom: 1px solid #f0f0f5;
+            transition: background 0.15s;
+            display: flex !important;
+            align-items: center;
+            gap: 8px;
+        }
+        .staff-dropdown-item:last-child {
+            border-bottom: none;
+        }
+        .staff-dropdown-item:hover {
+            background: #f0f8ff !important;
+        }
+        .staff-dropdown-item.selected {
+            background: #e3f2fd !important;
+            font-weight: 600;
+        }
+        .staff-dropdown-item .staff-id {
+            color: #888;
+            font-size: 11px;
+            font-weight: 400;
+        }
+        .staff-dropdown-item .staff-name {
+            font-weight: 500;
+        }
+        .staff-dropdown-item .staff-role {
+            font-size: 10px;
+            padding: 1px 8px;
+            border-radius: 10px;
+            background: #f0f0f5;
+            color: #888;
+            margin-left: auto;
+        }
+        .staff-dropdown-empty {
+            padding: 12px;
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+        }
+
+        /* ============================================
+           ASSIGNED ORDERS TIMELINE
+           ============================================ */
+        .assigned-timeline-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #f0f0f5;
+        }
+        .assigned-timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .assigned-timeline-header h3 {
+            color: #1a1a2e;
+            margin: 0;
+            font-size: 18px;
+        }
+        .assigned-timeline-header h3 i {
+            color: #2196F3;
+            margin-right: 10px;
+        }
+        .assigned-timeline-header .subtitle {
+            color: #888;
+            font-size: 13px;
+            margin: 5px 0 0 0;
+        }
+        .timeline-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .timeline-item {
+            display: flex;
+            gap: 20px;
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f5;
+            align-items: center;
+        }
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+        .timeline-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .timeline-dot.pending {
+            background: #ff9800;
+        }
+        .timeline-dot.in-progress {
+            background: #2196F3;
+        }
+        .timeline-dot.completed {
+            background: #4CAF50;
+        }
+        .timeline-line {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 6px;
+        }
+        .timeline-content {
+            flex: 1;
+        }
+        .timeline-content .order-id {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .timeline-content .customer-info {
+            color: #666;
+            font-size: 13px;
+        }
+        .timeline-content .staff-info {
+            color: #00d4ff;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .timeline-meta {
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .timeline-meta .assigned-date {
+            font-size: 12px;
+            color: #888;
+        }
+        .timeline-meta .days-until {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .timeline-meta .days-until.urgent {
+            color: #f44336;
+        }
+        .timeline-meta .days-until.warning {
+            color: #ff9800;
+        }
+        .timeline-meta .days-until.safe {
+            color: #4CAF50;
+        }
+        .timeline-empty {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+        .timeline-empty i {
+            font-size: 36px;
+            color: #ccc;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 768px) {
+            .staff-table-wrapper {
+                overflow-x: auto !important;
+            }
+            .staff-table {
+                min-width: 700px;
+            }
+            .staff-dropdown {
+                min-width: 140px;
+            }
+            .timeline-item {
+                flex-wrap: wrap;
+            }
+            .timeline-meta {
+                text-align: left;
+                padding-left: 34px;
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
     <div id="loadingOverlay" class="loading-overlay">
-        <i class="fas fa-spinner fa-spin"></i>
+        <div class="spinner"></div>
+        <p>Loading Admin Dashboard...</p>
     </div>
 
     <div id="adminDashboard" style="display:none;"></div>
-
-    <script>
-        (function() {
-            const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
-            if (user) {
-                try {
-                    const userData = JSON.parse(user);
-                    if (userData.role !== 'ADMIN') {
-                        window.location.href = '../staff/staff-dashboard.html';
-                    }
-                } catch (e) {
-                    window.location.href = '../auth.html';
-                }
-            } else {
-                window.location.href = '../auth.html';
-            }
-        })();
-    </script>
 
     <script type="module" src="../js/admin/admin-dashboard.js"></script>
 </body>

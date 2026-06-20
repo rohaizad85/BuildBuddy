@@ -1,19 +1,24 @@
 {
   "name": "buildbuddy",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "BuildBuddy PC Builder with AI",
+  "main": "js/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node js/server.js",
+    "dev": "nodemon js/server.js"
   },
-  "keywords": [],
+  "keywords": ["pc-builder", "ai", "hardware"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "node-fetch": "^2.7.0"
+    "@google/generative-ai": "^0.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }

@@ -9,7 +9,7 @@ let cartTotal = 0;
 let selectedPayment = null;
 let voucherDiscount = 0;
 let userData = null;
-let originalStockData = {}; // Store original stock for rollback if needed
+let originalStockData = {};
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadCheckout();
@@ -46,7 +46,7 @@ async function loadCheckout() {
                 name: ''
             }));
             
-            // ALSO load localStorage items (bundles + any items not in DB)
+            // Load localStorage items
             const local = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]');
             local.forEach((item, i) => {
                 if (item.type === 'product') {
@@ -90,13 +90,17 @@ async function loadCheckout() {
                 }
             });
             
-            // Load user details for autofill
-            const dbUser = await supabase.from('users')
+            // Load user details
+            const { data: dbUser, error: userError } = await supabase.from('users')
                 .select('full_name, email, phone, address')
                 .eq('user_id', user.user_id || user.id)
                 .single();
-            if (dbUser) userData = dbUser;
+            
+            if (dbUser && !userError) {
+                userData = dbUser;
+            }
         } else {
+            // Guest user - load from localStorage only
             const local = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]');
             cartItems = [];
             cartServices = [];
@@ -111,11 +115,12 @@ async function loadCheckout() {
                         name: item.name || ''
                     });
                 } else {
+                    const isBundle = item.type === 'bundle';
                     cartItems.push({ 
                         id: 'local_' + i, 
                         type: item.type || 'product', 
-                        productId: item.id, 
-                        bundleId: item.id, 
+                        productId: isBundle ? undefined : item.id, 
+                        bundleId: isBundle ? item.id : undefined, 
                         quantity: item.quantity || 1, 
                         price: item.price, 
                         name: item.name,
@@ -125,59 +130,123 @@ async function loadCheckout() {
             });
         }
         
-        // Fetch details and store original stock
         await fetchDetails();
-        
-        // Calculate total
         calculateTotal();
         
         if (cartItems.length === 0 && cartServices.length === 0) {
-            container.innerHTML = `<div style="text-align:center;padding:60px;"><i class="fas fa-shopping-cart" style="font-size:64px;color:#ccc;margin-bottom:20px;"></i><h2>Your cart is empty</h2><button class="place-order-btn" onclick="window.location.href='index.html'" style="max-width:300px;">Continue Shopping</button></div>`;
+            container.innerHTML = `
+                <div style="text-align:center;padding:60px;">
+                    <i class="fas fa-shopping-cart" style="font-size:64px;color:#ccc;margin-bottom:20px;"></i>
+                    <h2>Your cart is empty</h2>
+                    <button class="place-order-btn" onclick="window.location.href='index.html'" style="max-width:300px;">Continue Shopping</button>
+                </div>
+            `;
             return;
         }
         
         renderCheckout();
         
     } catch (error) {
-        console.error('Error:', error);
-        container.innerHTML = '<p style="text-align:center;padding:60px;">Failed to load checkout. Please try again.</p>';
+        console.error('Error loading checkout:', error);
+        container.innerHTML = `
+            <div style="text-align:center;padding:60px;">
+                <p style="color:#f44336;">Failed to load checkout. Please try again.</p>
+                <button class="place-order-btn" onclick="location.reload()" style="max-width:300px;margin-top:20px;">Retry</button>
+            </div>
+        `;
     }
 }
 
 async function fetchDetails() {
+    // Fetch product details
     for (const item of cartItems) {
         if (item.productId) {
-            const { data, error } = await supabase.from('inventory').select('*').eq('i_id', item.productId).single();
-            if (data && !error) { 
-                item.price = data.i_price; 
-                item.name = data.i_name; 
-                item.stock = data.i_quantity;
-                // Store original stock for verification
-                originalStockData['prod_' + item.productId] = data.i_quantity;
+            try {
+                const { data, error } = await supabase
+                    .from('inventory')
+                    .select('*')
+                    .eq('i_id', item.productId)
+                    .single();
+                
+                if (data && !error) { 
+                    item.price = parseFloat(data.i_price) || 0; 
+                    item.name = data.i_name || 'Product'; 
+                    item.stock = data.i_quantity || 0;
+                    originalStockData['prod_' + item.productId] = data.i_quantity || 0;
+                } else {
+                    console.warn(`⚠️ Product ID ${item.productId} not found in inventory:`, error);
+                    item._dbNotFound = true;
+                    // Use existing data from localStorage if available
+                    item.price = parseFloat(item.price) || 0;
+                    item.stock = parseInt(item.stock) || 0;
+                }
+            } catch (e) {
+                console.warn(`⚠️ Error fetching product ${item.productId}:`, e);
+                item._dbNotFound = true;
+                item.price = parseFloat(item.price) || 0;
+                item.stock = parseInt(item.stock) || 0;
             }
         } else if (item.bundleId) {
-            const { data, error } = await supabase.from('bundles').select('*').eq('bundle_id', item.bundleId).single();
-            if (data && !error) { 
-                item.price = data.bundle_price; 
-                item.name = data.bundle_name; 
-                item.stock = data.bundle_stock;
-                originalStockData['bundle_' + item.bundleId] = data.bundle_stock;
+            try {
+                const { data, error } = await supabase
+                    .from('bundles')
+                    .select('*')
+                    .eq('bundle_id', item.bundleId)
+                    .single();
+                
+                if (data && !error) { 
+                    item.price = parseFloat(data.bundle_price) || 0; 
+                    item.name = data.bundle_name || 'Bundle'; 
+                    item.stock = data.bundle_stock || 0;
+                    originalStockData['bundle_' + item.bundleId] = data.bundle_stock || 0;
+                } else {
+                    console.warn(`⚠️ Bundle ID ${item.bundleId} not found in database:`, error);
+                    item._dbNotFound = true;
+                    item.price = parseFloat(item.price) || 0;
+                    item.stock = parseInt(item.stock) || 0;
+                }
+            } catch (e) {
+                console.warn(`⚠️ Error fetching bundle ${item.bundleId}:`, e);
+                item._dbNotFound = true;
+                item.price = parseFloat(item.price) || 0;
+                item.stock = parseInt(item.stock) || 0;
             }
         }
     }
+    
+    // Fetch service details
     for (const s of cartServices) {
-        const { data, error } = await supabase.from('service').select('*').eq('service_id', s.serviceId).single();
-        if (data && !error) { 
-            s.name = data.service_name; 
-            s.price = data.service_price; 
+        try {
+            const { data, error } = await supabase
+                .from('service')
+                .select('*')
+                .eq('service_id', s.serviceId)
+                .single();
+            
+            if (data && !error) { 
+                s.name = data.service_name || 'Service'; 
+                s.price = parseFloat(data.service_price) || 0; 
+            } else {
+                console.warn(`⚠️ Service ID ${s.serviceId} not found in database:`, error);
+                s._dbNotFound = true;
+                s.price = parseFloat(s.price) || 0;
+            }
+        } catch (e) {
+            console.warn(`⚠️ Error fetching service ${s.serviceId}:`, e);
+            s._dbNotFound = true;
+            s.price = parseFloat(s.price) || 0;
         }
     }
 }
 
 function calculateTotal() {
     cartTotal = 0;
-    cartItems.forEach(i => cartTotal += (i.price || 0) * (i.quantity || 1));
-    cartServices.forEach(s => cartTotal += parseFloat(s.price || 0) * (s.quantity || 1));
+    cartItems.forEach(i => {
+        cartTotal += (parseFloat(i.price) || 0) * (parseInt(i.quantity) || 1);
+    });
+    cartServices.forEach(s => {
+        cartTotal += parseFloat(s.price) || 0;
+    });
 }
 
 function renderCheckout() {
@@ -253,7 +322,7 @@ function renderCheckout() {
                 ${renderSummaryItems()}
                 <div class="summary-item"><span>Subtotal</span><span>RM ${cartTotal.toFixed(2)}</span></div>
                 <div class="summary-item discount" id="voucherDiscountRow" style="display:none;"><span>Voucher Discount</span><span>-RM 0.00</span></div>
-                <div class="summary-item discount"><span>Member Discount (10%)</span><span>-RM ${getUser() ? (cartTotal * 0.1).toFixed(2) : '0.00'}</span></div>
+                ${getUser() ? `<div class="summary-item discount" id="memberDiscountRow"><span>Member Discount (10%)</span><span>-RM ${(cartTotal * 0.1).toFixed(2)}</span></div>` : ''}
                 <div class="summary-item"><span>Shipping</span><span style="color:#4CAF50;">Free</span></div>
                 <div class="summary-item total"><span>Total</span><span id="finalTotal">RM ${getFinalTotal().toFixed(2)}</span></div>
                 <button class="place-order-btn" id="placeOrderBtn" onclick="window.placeOrder()">
@@ -271,19 +340,71 @@ function renderCheckout() {
 
 function renderSummaryItems() {
     let html = '';
+    
+    if (cartItems.length === 0 && cartServices.length === 0) {
+        return '<p style="color:#888;text-align:center;padding:20px;">No items in cart</p>';
+    }
+    
     cartItems.forEach(item => {
-        const itemTotal = (item.price || 0) * (item.quantity || 1);
-        html += `<div class="summary-item"><span>${item.name || 'Item'} x${item.quantity || 1}</span><span>RM ${itemTotal.toFixed(2)}</span></div>`;
+        const itemTotal = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+        const icon = item.type === 'bundle' ? 'fa-desktop' : 'fa-microchip';
+        const gradientStyle = item.type === 'bundle'
+            ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);'
+            : 'background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);';
+        const warningIcon = item._dbNotFound ? ' ⚠️' : '';
+        const stockWarning = (item.stock !== undefined && item.stock < (item.quantity || 1)) 
+            ? ` <span style="color:#f44336;font-size:11px;">(Only ${item.stock} left)</span>` 
+            : '';
+        
+        html += `
+            <div class="summary-item" style="align-items:center; gap:10px; padding: 10px 0;">
+                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                    <div style="width:44px; height:44px; border-radius:8px; ${gradientStyle} display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <i class="fas ${icon}" style="color:rgba(255,255,255,0.9); font-size:18px;"></i>
+                    </div>
+                    <span style="font-size:13px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${item.name || 'Item'}${warningIcon} 
+                        <span style="color:#888;">x${item.quantity || 1}</span>
+                        ${stockWarning}
+                    </span>
+                </div>
+                <span style="flex-shrink:0;">RM ${itemTotal.toFixed(2)}</span>
+            </div>`;
     });
+    
     cartServices.forEach(s => {
-        html += `<div class="summary-item"><span>${s.name || 'Service'}</span><span>RM ${parseFloat(s.price || 0).toFixed(2)}</span></div>`;
+        const warningIcon = s._dbNotFound ? ' ⚠️' : '';
+        html += `
+            <div class="summary-item" style="align-items:center; gap:10px; padding: 10px 0;">
+                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                    <div style="width:44px; height:44px; border-radius:8px; background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <i class="fas fa-tools" style="color:rgba(255,255,255,0.9); font-size:18px;"></i>
+                    </div>
+                    <span style="font-size:13px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${s.name || 'Service'}${warningIcon}
+                    </span>
+                </div>
+                <span style="flex-shrink:0;">RM ${parseFloat(s.price || 0).toFixed(2)}</span>
+            </div>`;
     });
+    
+    // Show warning if any items are not in database
+    const hasMissingItems = cartItems.some(i => i._dbNotFound) || cartServices.some(s => s._dbNotFound);
+    if (hasMissingItems) {
+        html += `
+            <div style="padding:10px;background:#fff3cd;border-radius:8px;margin-top:10px;font-size:12px;color:#856404;">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Some items could not be verified in our inventory. Please contact support if you experience issues.
+            </div>
+        `;
+    }
+    
     return html;
 }
 
 function getFinalTotal() {
     const memberDiscount = getUser() ? cartTotal * 0.1 : 0;
-    return cartTotal - memberDiscount - voucherDiscount;
+    return Math.max(0, cartTotal - memberDiscount - voucherDiscount);
 }
 
 // ===== GLOBAL FUNCTIONS =====
@@ -332,6 +453,7 @@ function updateTotalDisplay() {
 }
 
 window.placeOrder = async function() {
+    // Validate form
     const name = document.getElementById('shipName').value.trim();
     const phone = document.getElementById('shipPhone').value.trim();
     const email = document.getElementById('shipEmail').value.trim();
@@ -339,13 +461,22 @@ window.placeOrder = async function() {
     
     let hasError = false;
     
-    if (!name) { showError('nameError', 'Name is required'); hasError = true; }
+    if (!name) { showError('nameError', 'Name is required'); hasError = true; } 
+    else { hideError('nameError'); }
+    
     if (!phone) { showError('phoneError', 'Phone is required'); hasError = true; }
     else if (!/^\+?[\d\s-]{8,15}$/.test(phone)) { showError('phoneError', 'Invalid phone number'); hasError = true; }
+    else { hideError('phoneError'); }
+    
     if (!email) { showError('emailError', 'Email is required'); hasError = true; }
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('emailError', 'Invalid email'); hasError = true; }
+    else { hideError('emailError'); }
+    
     if (!address) { showError('addressError', 'Address is required'); hasError = true; }
+    else { hideError('addressError'); }
+    
     if (!selectedPayment) { showError('paymentError', 'Please select a payment method'); hasError = true; }
+    else { hideError('paymentError'); }
     
     if (hasError) return;
     
@@ -354,66 +485,103 @@ window.placeOrder = async function() {
     btn.disabled = true;
     
     try {
-        // ✅ FIXED: Proper stock reduction with quantity
-        const stockReductions = [];
+        // Check if any items are missing from database - warn but continue
+        const missingItems = cartItems.filter(i => i._dbNotFound);
+        if (missingItems.length > 0) {
+            const confirmMsg = `Some items (${missingItems.map(i => i.name).join(', ')}) could not be verified in our inventory. 
+They may have been removed from our catalog. Do you want to continue with your order anyway?`;
+            if (!confirm(confirmMsg)) {
+                btn.innerHTML = '<i class="fas fa-lock"></i> Place Order';
+                btn.disabled = false;
+                return;
+            }
+        }
         
-        // Check stock availability first
+        // Stock validation - only check items that exist in database
+        const stockReductions = [];
+        const stockErrors = [];
+        
         for (const item of cartItems) {
-            const quantity = item.quantity || 1;
+            const quantity = parseInt(item.quantity) || 1;
+            
+            // Skip items not in database - we can't verify stock
+            if (item._dbNotFound) {
+                console.warn(`⚠️ Skipping stock check for ${item.name} (not in DB)`);
+                continue;
+            }
             
             if (item.productId) {
-                // Fetch current stock to ensure we have the latest
+                // Fetch current stock from inventory table
                 const { data: currentStock, error: stockError } = await supabase
                     .from('inventory')
                     .select('i_quantity')
                     .eq('i_id', item.productId)
                     .single();
                 
-                if (stockError) {
-                    throw new Error(`Failed to check stock for ${item.name || 'item'}`);
+                if (stockError || !currentStock) {
+                    stockErrors.push(`Failed to check stock for "${item.name || 'Item'}": ${stockError?.message || 'Not found'}`);
+                    continue;
                 }
                 
-                if (currentStock.i_quantity < quantity) {
-                    throw new Error(`Not enough stock for "${item.name || 'Item'}". Available: ${currentStock.i_quantity}, Requested: ${quantity}`);
+                const availableStock = currentStock.i_quantity ?? 0;
+                if (availableStock < quantity) {
+                    stockErrors.push(`Not enough stock for "${item.name || 'Item'}". Available: ${availableStock}, Requested: ${quantity}`);
+                    continue;
                 }
                 
                 stockReductions.push({
                     type: 'inventory',
                     id: item.productId,
                     quantity: quantity,
-                    currentStock: currentStock.i_quantity,
-                    newStock: currentStock.i_quantity - quantity,
+                    currentStock: availableStock,
+                    newStock: availableStock - quantity,
                     name: item.name
                 });
-            }
-            
-            if (item.bundleId) {
-                const { data: currentStock, error: stockError } = await supabase
-                    .from('bundles')
-                    .select('bundle_stock')
-                    .eq('bundle_id', item.bundleId)
-                    .single();
                 
-                if (stockError) {
-                    throw new Error(`Failed to check stock for ${item.name || 'bundle'}`);
+            } else if (item.bundleId) {
+                // Check if bundles table exists - if not, skip
+                try {
+                    const { data: currentStock, error: stockError } = await supabase
+                        .from('bundles')
+                        .select('bundle_stock')
+                        .eq('bundle_id', item.bundleId)
+                        .single();
+                    
+                    if (stockError || !currentStock) {
+                        stockErrors.push(`Failed to check stock for bundle "${item.name || 'Bundle'}": ${stockError?.message || 'Not found'}`);
+                        continue;
+                    }
+                    
+                    const availableStock = currentStock.bundle_stock ?? 0;
+                    if (availableStock < quantity) {
+                        stockErrors.push(`Not enough stock for bundle "${item.name || 'Bundle'}". Available: ${availableStock}, Requested: ${quantity}`);
+                        continue;
+                    }
+                    
+                    stockReductions.push({
+                        type: 'bundle',
+                        id: item.bundleId,
+                        quantity: quantity,
+                        currentStock: availableStock,
+                        newStock: availableStock - quantity,
+                        name: item.name
+                    });
+                } catch (e) {
+                    // If bundles table doesn't exist, skip
+                    console.warn('⚠️ Could not check bundle stock:', e);
                 }
-                
-                if (currentStock.bundle_stock < quantity) {
-                    throw new Error(`Not enough stock for "${item.name || 'Bundle'}". Available: ${currentStock.bundle_stock}, Requested: ${quantity}`);
-                }
-                
-                stockReductions.push({
-                    type: 'bundle',
-                    id: item.bundleId,
-                    quantity: quantity,
-                    currentStock: currentStock.bundle_stock,
-                    newStock: currentStock.bundle_stock - quantity,
-                    name: item.name
-                });
             }
         }
         
-        // Now perform stock reductions
+        // If there are stock errors, show them and abort
+        if (stockErrors.length > 0) {
+            alert('Stock issues:\n\n' + stockErrors.join('\n'));
+            btn.innerHTML = '<i class="fas fa-lock"></i> Place Order';
+            btn.disabled = false;
+            return;
+        }
+        
+        // Perform stock reductions
         for (const reduction of stockReductions) {
             console.log(`✅ Reducing stock for ${reduction.name}: ${reduction.currentStock} → ${reduction.newStock} (Qty: ${reduction.quantity})`);
             
@@ -439,8 +607,9 @@ window.placeOrder = async function() {
             localStorage.setItem('buildbuddy_session_id', sessionId);
         }
         
+        // Create session if it doesn't exist
         if (!user) {
-            const existingSession = await supabase.from('usersession')
+            const { data: existingSession } = await supabase.from('usersession')
                 .select('session_id')
                 .eq('session_id', sessionId);
             
@@ -455,7 +624,7 @@ window.placeOrder = async function() {
         const cartId = user ? dataService.currentCartId : null;
         
         // Create payment record
-        const paymentResult = await supabase.from('payment').insert({
+        const { data: paymentResult, error: paymentError } = await supabase.from('payment').insert({
             session_id: sessionId,
             cart_id: cartId,
             user_id: user ? (user.user_id || user.id) : null,
@@ -465,14 +634,20 @@ window.placeOrder = async function() {
             payment_date: new Date().toISOString()
         }).select().single();
         
-        // Show success with receipt download
-        showSuccess(total, paymentResult?.payment_id);
-
+        if (paymentError) {
+            console.error('Payment creation error:', paymentError);
+            throw new Error(`Failed to create payment: ${paymentError.message}`);
+        }
+        
+        // Clear cart after successful order
         if (user) {
             await dataService.createNewCart();
         }
-        
         localStorage.removeItem('buildbuddy_cart');
+        document.querySelectorAll('.cart-count').forEach(el => el.textContent = '0');
+        
+        // Show success
+        showSuccess(total, paymentResult?.payment_id);
         
     } catch (error) {
         console.error('Order failed:', error);
@@ -485,41 +660,87 @@ window.placeOrder = async function() {
 function showSuccess(total, paymentId) {
     const overlay = document.createElement('div');
     overlay.className = 'success-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
     
     const isCash = selectedPayment === 'cash';
     const orderRef = paymentId ? 'BB-' + String(paymentId).padStart(6, '0') : 'BB' + Date.now().toString(36).toUpperCase();
+    const phone = document.getElementById('shipPhone')?.value || '';
     
     overlay.innerHTML = `
-        <div class="success-modal">
-            <div class="icon ${isCash ? 'cash' : 'online'}">
+        <div style="
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        ">
+            <div style="font-size:72px;margin-bottom:20px;color:${isCash ? '#4CAF50' : '#2196F3'};">
                 <i class="fas fa-${isCash ? 'money-bill-wave' : 'check-circle'}"></i>
             </div>
-            <h2>Thank You for Your Purchase! 🎉</h2>
-            <div class="amount">RM ${total.toFixed(2)}</div>
+            <h2 style="color:#1a1a2e;margin-bottom:10px;">Thank You for Your Purchase! 🎉</h2>
+            <div style="font-size:28px;font-weight:700;color:#1a1a2e;margin:10px 0;">RM ${total.toFixed(2)}</div>
             ${isCash ? `
-                <p>📦 Your order has been placed successfully.<br>
-                <strong>Please prepare RM ${total.toFixed(2)} upon delivery.</strong><br>
-                Our team will contact you at <strong>${document.getElementById('shipPhone').value}</strong> before delivery.<br>
-                Expected delivery: <strong>3-5 business days</strong></p>
+                <p style="color:#666;margin-bottom:20px;line-height:1.6;">
+                    📦 Your order has been placed successfully.<br>
+                    <strong>Please prepare RM ${total.toFixed(2)} upon delivery.</strong><br>
+                    Our team will contact you at <strong>${phone}</strong> before delivery.<br>
+                    Expected delivery: <strong>3-5 business days</strong>
+                </p>
             ` : `
-                <p>✅ Your payment has been processed successfully.<br>
-                Expected delivery: <strong>3-5 business days</strong></p>
+                <p style="color:#666;margin-bottom:20px;line-height:1.6;">
+                    ✅ Your payment has been processed successfully.<br>
+                    Expected delivery: <strong>3-5 business days</strong>
+                </p>
             `}
             <p style="color:#888;font-size:13px;">Order reference: #${orderRef}</p>
-            <button class="place-order-btn download-receipt-btn" style="margin-top: 10px; background: #1a1a2e; color: white;">
-                <i class="fas fa-download"></i> Download Receipt (PDF)
-            </button>
-            <button class="place-order-btn" onclick="window.location.href='index.html'">
-                <i class="fas fa-home"></i> Back to Home
-            </button>
+            <div style="display:flex; gap:12px; margin-top:10px;">
+                <button onclick="window.location.href='index.html'" style="
+                    flex:1;
+                    padding:16px;
+                    background:#00d4ff;
+                    color:#1a1a2e;
+                    border:none;
+                    border-radius:8px;
+                    font-size:16px;
+                    font-weight:600;
+                    cursor:pointer;
+                    transition:all 0.3s;
+                ">
+                    <i class="fas fa-check"></i> OK
+                </button>
+                <button id="downloadReceiptBtn" style="
+                    flex:1;
+                    padding:16px;
+                    background:#1a1a2e;
+                    color:white;
+                    border:none;
+                    border-radius:8px;
+                    font-size:16px;
+                    font-weight:600;
+                    cursor:pointer;
+                    transition:all 0.3s;
+                ">
+                    <i class="fas fa-download"></i> Download PDF
+                </button>
+            </div>
         </div>
     `;
     
     document.body.appendChild(overlay);
-    document.querySelectorAll('.cart-count').forEach(el => el.textContent = '0');
     
-    // Download receipt button click handler
-    const downloadBtn = overlay.querySelector('.download-receipt-btn');
+    // Download receipt button
+    const downloadBtn = overlay.querySelector('#downloadReceiptBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
             const user = getUser();
@@ -533,9 +754,9 @@ function showSuccess(total, paymentId) {
                     ...cartItems.map(i => ({
                         name: i.name || 'Product',
                         type: i.type || 'product',
-                        quantity: i.quantity || 1,
-                        price: i.price || 0,
-                        total: (i.price || 0) * (i.quantity || 1)
+                        quantity: parseInt(i.quantity) || 1,
+                        price: parseFloat(i.price) || 0,
+                        total: (parseFloat(i.price) || 0) * (parseInt(i.quantity) || 1)
                     })),
                     ...cartServices.map(s => ({
                         name: s.name || 'Service',
@@ -547,10 +768,10 @@ function showSuccess(total, paymentId) {
                 ]
             };
             downloadReceipt(orderData, user || {
-                full_name: document.getElementById('shipName').value,
-                email: document.getElementById('shipEmail').value,
-                phone: document.getElementById('shipPhone').value,
-                address: document.getElementById('shipAddress').value
+                full_name: document.getElementById('shipName')?.value || '',
+                email: document.getElementById('shipEmail')?.value || '',
+                phone: document.getElementById('shipPhone')?.value || '',
+                address: document.getElementById('shipAddress')?.value || ''
             });
         });
     }
@@ -558,12 +779,24 @@ function showSuccess(total, paymentId) {
 
 function showError(elementId, message) {
     const el = document.getElementById(elementId);
-    if (el) { el.textContent = message; el.style.display = 'block'; }
+    if (el) { 
+        el.textContent = message; 
+        el.style.display = 'block'; 
+    }
+}
+
+function hideError(elementId) {
+    const el = document.getElementById(elementId);
+    if (el) { el.style.display = 'none'; }
 }
 
 function escapeAttr(str) {
     if (!str) return '';
-    return str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(str)
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/'/g, '&#39;');
 }
 
-console.log('✅ checkout.js loaded');
+console.log('✅ payment.js loaded');
