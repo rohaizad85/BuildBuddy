@@ -1,7 +1,21 @@
 // D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\script.js
 import dataService from './data-service.js';
-import { getCartCount, updateCartCountDisplay, addToCart as addToCartUtil } from './cart-utils.js';
+import { 
+    getUser,
+    getLocalCart,
+    saveLocalCart,
+    clearLocalCart,
+    getCartCount,
+    updateCartCountDisplay,
+    addToCart as addToCartUtil,
+    addBundleToCart,
+    syncLocalCartToDatabase,
+    initCart,
+    setupLoginButton,
+    clearCartOnLogout
+} from './cart-utils.js';
 import supabase from './supabase-client.js';
+import Pc3DViewer from './services/buildcores.js';
 
 let selectedParts = {
     cpu: null,
@@ -17,45 +31,47 @@ let inventoryData = [];
 let servicesData = [];
 let compatibilityMode = true;
 let buildCompleted = false;
+let productQuantities = {};
+let pcViewer = null;
+let viewerInitialized = false;
+let viewerReady = false;
+let modalViewer = null;
+let modalViewerInitialized = false;
 
 const isBuilderPage = window.location.pathname.includes('builder.html');
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 DOM Content Loaded');
     await updateCartCountDisplay();
     await loadInitialData();
     
     if (isBuilderPage) {
+        console.log('📄 Builder page detected');
         initializeBuilderPage();
+        // Initialize 3D viewer after a slight delay
+        setTimeout(() => {
+            initialize3DViewer();
+        }, 500);
     } else {
+        console.log('📄 Home page detected');
         initializeHomePage();
     }
 });
 
 async function loadInitialData() {
     try {
+        console.log('📦 Loading initial data...');
         showLoading(true);
         
-        // Load both inventory and services
         const [inventory, services] = await Promise.all([
             dataService.getInventory(),
             dataService.getServices()
         ]);
         
-        // Store the data
         inventoryData = inventory || [];
         servicesData = services || [];
+        console.log(`✅ Data loaded: ${inventoryData.length} inventory items, ${servicesData.length} services`);
         
-        console.log('✅ Data loaded successfully');
-        console.log('📦 Inventory items:', inventoryData.length);
-        console.log('🔧 Services:', servicesData.length);
-        
-        // Log the Corsair item to verify
-        const corsair = inventoryData.find(p => p.i_name && p.i_name.includes('Corsair Vengeance 16GB'));
-        if (corsair) {
-            console.log('✅ Corsair Vengeance 16GB loaded:', corsair.i_image_path);
-        }
-        
-        // After data is loaded, initialize the page
         if (isBuilderPage) {
             initializeBuilderPage();
         } else {
@@ -109,32 +125,135 @@ function initializeHomePage() {
 }
 
 function initializeBuilderPage() {
+    console.log('🏗️ Initializing builder page...');
     renderProducts('all');
     updateSelectedPartsDisplay();
     setupBuilderListeners();
     updateBuildSummary();
+    setup3DViewerEvents();
 }
 
-function getProductImageUrl(imagePath) {
-    if (!imagePath) {
-        return null;
+// ============================================
+// GET SPECS FOR COMPONENT
+// ============================================
+
+function getSpecsForComponent(part) {
+    const specs = [];
+    if (part.i_category === 'cpu') {
+        if (part.i_cpu_cores) specs.push(`${part.i_cpu_cores} Cores`);
+        if (part.i_cpu_clock_speed) specs.push(part.i_cpu_clock_speed);
     }
+    if (part.i_category === 'ram') {
+        if (part.i_ram_speed) specs.push(part.i_ram_speed);
+        if (part.i_ram_type) specs.push(part.i_ram_type);
+    }
+    if (part.i_category === 'gpu') {
+        if (part.i_gpu_memory) specs.push(part.i_gpu_memory);
+    }
+    if (part.i_category === 'storage') {
+        if (part.i_storage_type) specs.push(part.i_storage_type);
+        if (part.i_storage_speed) specs.push(part.i_storage_speed);
+    }
+    if (part.i_category === 'motherboard') {
+        if (part.i_motherboard_socket) specs.push(part.i_motherboard_socket);
+        if (part.i_motherboard_chipset) specs.push(part.i_motherboard_chipset);
+    }
+    if (part.i_category === 'psu') {
+        if (part.i_psu_wattage) specs.push(`${part.i_psu_wattage}W`);
+        if (part.i_psu_certification) specs.push(part.i_psu_certification);
+    }
+    return specs.join(' • ');
+}
+
+// ============================================
+// GET PRODUCT IMAGE URL
+// ============================================
+
+function getProductImageUrl(imagePath) {
+    if (!imagePath) return null;
     
-    // If it's already a full URL (placeholder), return it directly
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
         return imagePath;
     }
     
-    // Construct the public URL directly
     const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
     const bucket = 'images';
-    
-    // Encode the filename for URL
     const encodedPath = encodeURIComponent(imagePath);
     return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodedPath}`;
 }
 
-// ===== RENDER PRODUCTS =====
+// ============================================
+// GET AI SPECS
+// ============================================
+
+function getAISpecs(product) {
+    const specs = {
+        cpu: {
+            label: 'CPU',
+            specs: [
+                { key: 'Cores', value: product.i_cpu_cores || 'N/A' },
+                { key: 'Clock Speed', value: product.i_cpu_clock_speed || 'N/A' },
+                { key: 'Socket', value: product.i_motherboard_socket || 'N/A' },
+                { key: 'TDP', value: product.i_psu_wattage ? `${product.i_psu_wattage}W` : 'N/A' }
+            ]
+        },
+        ram: {
+            label: 'RAM',
+            specs: [
+                { key: 'Speed', value: product.i_ram_speed || 'N/A' },
+                { key: 'Type', value: product.i_ram_type || 'N/A' },
+                { key: 'Capacity', value: product.i_name ? product.i_name.match(/\d+GB/)?.[0] || 'N/A' : 'N/A' }
+            ]
+        },
+        gpu: {
+            label: 'GPU',
+            specs: [
+                { key: 'Memory', value: product.i_gpu_memory || 'N/A' },
+                { key: 'Interface', value: 'PCIe x16' },
+                { key: 'VRAM', value: product.i_gpu_memory || 'N/A' }
+            ]
+        },
+        storage: {
+            label: 'Storage',
+            specs: [
+                { key: 'Type', value: product.i_storage_type || 'N/A' },
+                { key: 'Speed', value: product.i_storage_speed || 'N/A' },
+                { key: 'Capacity', value: product.i_name ? product.i_name.match(/\d+TB|\d+GB/)?.[0] || 'N/A' : 'N/A' }
+            ]
+        },
+        motherboard: {
+            label: 'Motherboard',
+            specs: [
+                { key: 'Socket', value: product.i_motherboard_socket || 'N/A' },
+                { key: 'Chipset', value: product.i_motherboard_chipset || 'N/A' },
+                { key: 'RAM Slots', value: product.i_ram_type || 'N/A' }
+            ]
+        },
+        psu: {
+            label: 'PSU',
+            specs: [
+                { key: 'Wattage', value: product.i_psu_wattage ? `${product.i_psu_wattage}W` : 'N/A' },
+                { key: 'Certification', value: product.i_psu_certification || 'N/A' },
+                { key: 'Efficiency', value: product.i_psu_certification || 'N/A' }
+            ]
+        },
+        cooler: {
+            label: 'Cooler',
+            specs: [
+                { key: 'Type', value: 'Air/Liquid' },
+                { key: 'Compatibility', value: product.i_motherboard_socket || 'N/A' },
+                { key: 'Noise Level', value: 'N/A' }
+            ]
+        }
+    };
+    
+    return specs[product.i_category] || { label: product.i_category, specs: [{ key: 'Type', value: product.i_category }] };
+}
+
+// ============================================
+// RENDER PRODUCTS
+// ============================================
+
 function renderProducts(category = 'all') {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
@@ -148,14 +267,14 @@ function renderProducts(category = 'all') {
     productsGrid.innerHTML = filteredProducts.map(product => {
         const isSelected = selectedParts[product.i_category] === product.i_id;
         const imageUrl = getProductImageUrl(product.i_image_path);
-        
-        // Only try to load image if it's a valid URL (not a placeholder that might fail)
         const shouldLoadImage = imageUrl && !imageUrl.includes('via.placeholder.com');
+        const quantity = productQuantities[product.i_id] || 0;
+        const inCart = quantity > 0;
+        const aiSpecs = getAISpecs(product);
         
         return `
-            <div class="product-card ${isSelected ? 'selected' : ''}" onclick="window.showProductDetail(${product.i_id})">
-                <span class="product-badge">${product.i_category.toUpperCase()}</span>
-                <div class="product-image">
+            <div class="product-card ${isSelected ? 'selected' : ''}" data-product-id="${product.i_id}">
+                <div class="product-image" onclick="window.showProductDetail(${product.i_id})">
                     ${shouldLoadImage ? `
                         <img src="${imageUrl}" 
                              alt="${product.i_name}"
@@ -166,20 +285,50 @@ function renderProducts(category = 'all') {
                         <i class="fas fa-${getIconForCategory(product.i_category)}"></i>
                         <span>${product.i_category}</span>
                     </div>
+                    <span class="product-badge">${product.i_category.toUpperCase()}</span>
                 </div>
                 <h4>${product.i_name}</h4>
-                <div class="product-specs">${product.i_brand || ''}</div>
+                
+                <div class="product-ai-specs">
+                    ${aiSpecs.specs.filter(s => s.value && s.value !== 'N/A').map(s => `
+                        <span class="spec-tag">
+                            <i class="fas fa-microchip"></i> ${s.key}: ${s.value}
+                        </span>
+                    `).join('')}
+                </div>
+                
                 <div class="product-price">RM ${product.i_price}</div>
                 <div class="product-stock ${product.i_quantity < 5 ? 'low-stock' : ''}">
                     <i class="fas fa-box"></i> ${product.i_quantity} in stock
                 </div>
+                
+                <div class="product-quantity-control">
+                    ${inCart ? `
+                        <div class="qty-control">
+                            <button class="qty-btn" onclick="window.updateProductQuantity(${product.i_id}, -1, ${product.i_quantity})">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="number" class="qty-input" value="${quantity}" min="0" max="${product.i_quantity}" 
+                                   onchange="window.updateProductQuantity(${product.i_id}, 0, ${product.i_quantity}, this.value)"
+                                   onfocus="this.select()">
+                            <button class="qty-btn" onclick="window.updateProductQuantity(${product.i_id}, 1, ${product.i_quantity})">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <button class="btn-remove" onclick="window.removeFromCart(${product.i_id})">
+                            <i class="fas fa-trash-alt"></i> Remove
+                        </button>
+                    ` : `
+                        <button class="btn-buy" onclick="window.addToCartWithQuantity(${product.i_id})">
+                            <i class="fas fa-shopping-cart"></i> Buy
+                        </button>
+                    `}
+                </div>
+                
                 <div class="product-actions">
                     <button class="btn-select ${isSelected ? 'selected-btn' : ''}" onclick="event.stopPropagation(); window.selectForBuild(${product.i_id})">
                         <i class="fas fa-${isSelected ? 'check-circle' : 'plus-circle'}"></i> 
                         ${isSelected ? 'Selected' : 'Select for Build'}
-                    </button>
-                    <button class="btn-add" onclick="event.stopPropagation(); window.addToCart(${product.i_id})">
-                        <i class="fas fa-cart-plus"></i> Add to Cart
                     </button>
                 </div>
             </div>
@@ -195,7 +344,111 @@ function getIconForCategory(category) {
     return icons[category] || 'box';
 }
 
-// ===== PRODUCT DETAIL MODAL =====
+// ============================================
+// QUANTITY CONTROL FUNCTIONS
+// ============================================
+
+window.updateProductQuantity = function(productId, change, maxStock, newValue) {
+    const product = inventoryData.find(p => p.i_id === productId);
+    if (!product) return;
+    
+    let currentQty = productQuantities[productId] || 0;
+    let newQty;
+    
+    if (newValue !== undefined) {
+        newQty = parseInt(newValue) || 0;
+    } else {
+        newQty = currentQty + change;
+    }
+    
+    if (newQty < 0) newQty = 0;
+    if (newQty > maxStock) {
+        showToast(`Only ${maxStock} units available in stock.`, 'warning');
+        newQty = maxStock;
+    }
+    
+    if (newQty === 0 && currentQty > 0) {
+        window.removeFromCart(productId);
+        return;
+    }
+    
+    if (newQty === 0) {
+        delete productQuantities[productId];
+    } else {
+        productQuantities[productId] = newQty;
+    }
+    
+    renderProducts(getCurrentCategory());
+    updateCartCountDisplay();
+};
+
+window.addToCartWithQuantity = function(productId) {
+    const product = inventoryData.find(p => p.i_id === productId);
+    if (!product) return;
+    
+    if (product.i_quantity <= 0) {
+        showToast('This product is out of stock.', 'error');
+        return;
+    }
+    
+    // Start with quantity 1 in local state
+    productQuantities[productId] = 1;
+    renderProducts(getCurrentCategory());
+    
+    // Add to actual cart
+    window.addToCart(productId);
+    
+    if (!selectedParts[product.i_category]) {
+        window.selectForBuild(productId);
+    }
+    
+    updateCartCountDisplay();
+};
+
+window.removeFromCart = async function(productId) {
+    const product = inventoryData.find(p => p.i_id === productId);
+    if (!product) return;
+    
+    if (!confirm(`Remove "${product.i_name}" from your cart?`)) return;
+    
+    try {
+        // Remove from database
+        const user = getUser();
+        if (user) {
+            await dataService.ensureInitialized();
+            const cartId = dataService.currentCartId;
+            
+            if (cartId) {
+                await supabase
+                    .from('cart_items')
+                    .delete()
+                    .eq('cart_id', cartId)
+                    .eq('i_id', productId);
+            }
+        }
+        
+        // Remove from local state
+        delete productQuantities[productId];
+        
+        // Remove from local cart storage
+        const localCart = getLocalCart();
+        const filtered = localCart.filter(i => !(i.type === 'product' && i.id === productId));
+        saveLocalCart(filtered);
+        
+        renderProducts(getCurrentCategory());
+        await updateCartCountDisplay();
+        showToast(`Removed ${product.i_name} from cart.`, 'info');
+        
+    } catch (error) {
+        console.error('Error removing from cart:', error);
+        showToast('Failed to remove item.', 'error');
+    }
+};
+
+// ============================================
+// PRODUCT DETAIL MODAL
+// ============================================
+
 window.showProductDetail = function(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
@@ -207,6 +460,7 @@ window.showProductDetail = function(productId) {
     const isSelected = selectedParts[product.i_category] === product.i_id;
     const imageUrl = getProductImageUrl(product.i_image_path);
     const shouldLoadImage = imageUrl && !imageUrl.includes('via.placeholder.com');
+    const aiSpecs = getAISpecs(product);
     
     modalMessage.innerHTML = `
         <div style="text-align: center;">
@@ -219,20 +473,26 @@ window.showProductDetail = function(productId) {
                     <span style="font-size: 12px; margin-top: 5px; color: #999;">${product.i_category}</span>
                 </div>
             </div>
+            
             <h3 style="margin-bottom: 5px;">${product.i_name}</h3>
             <span class="product-badge">${product.i_category.toUpperCase()}</span>
             <hr style="margin: 15px 0;">
-            <div style="text-align: left; display: grid; gap: 8px;">
+            
+            <div style="text-align: left; display: grid; gap: 8px; margin-bottom: 15px;">
                 <p><strong>Brand:</strong> ${product.i_brand || 'N/A'}</p>
                 <p><strong>Price:</strong> RM ${product.i_price}</p>
                 <p><strong>Stock:</strong> ${product.i_quantity} units</p>
+                ${aiSpecs.specs.filter(s => s.value && s.value !== 'N/A').map(s => `
+                    <p><strong>${s.key}:</strong> ${s.value}</p>
+                `).join('')}
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
                 <button class="btn-select ${isSelected ? 'selected-btn' : ''}" onclick="window.selectForBuild(${product.i_id})" style="flex: 1;">
                     <i class="fas fa-${isSelected ? 'check-circle' : 'plus-circle'}"></i> 
                     ${isSelected ? 'Selected' : 'Select for Build'}
                 </button>
-                <button class="btn-add" onclick="window.addToCart(${product.i_id})" style="flex: 1;">
+                <button class="btn-add" onclick="window.addToCartWithQuantity(${product.i_id})" style="flex: 1;">
                     <i class="fas fa-cart-plus"></i> Add to Cart
                 </button>
             </div>
@@ -243,30 +503,232 @@ window.showProductDetail = function(productId) {
     modal.style.display = 'flex';
 };
 
-function renderServices() {
-    const servicesGrid = document.getElementById('servicesGrid');
-    if (!servicesGrid) return;
+// ============================================
+// 3D VIEWER FUNCTIONS
+// ============================================
+
+function initialize3DViewer() {
+    console.log('🎮 Initializing 3D Viewer...');
     
-    servicesGrid.innerHTML = servicesData.map(service => `
-        <div class="service-card">
-            <i class="fas ${getServiceIcon(service.service_category)}"></i>
-            <h4>${service.service_name}</h4>
-            <p>${service.service_duration || 'Contact for duration'}</p>
-            <div class="service-price">RM ${service.service_price}</div>
-            <button class="btn-book" onclick="window.bookService(${service.service_id})">Book Now</button>
-        </div>
-    `).join('');
+    const viewerContainer = document.getElementById('sidebarPc3dViewer');
+    
+    if (!viewerContainer) {
+        console.warn('⚠️ 3D viewer container not found: #sidebarPc3dViewer');
+        return;
+    }
+    
+    console.log('📦 3D viewer container found:', viewerContainer.id);
+
+    try {
+        pcViewer = new Pc3DViewer();
+        console.log('✅ Pc3DViewer instance created');
+        
+        pcViewer.init('sidebarPc3dViewer').then(() => {
+            console.log('✅ 3D Viewer initialized successfully');
+            viewerInitialized = true;
+            viewerReady = true;
+            update3DViewer();
+        }).catch(err => {
+            console.error('❌ Failed to initialize 3D viewer:', err);
+            viewerInitialized = false;
+            viewerReady = false;
+        });
+    } catch (error) {
+        console.error('❌ Error creating 3D viewer:', error);
+        viewerInitialized = false;
+        viewerReady = false;
+    }
 }
 
-function getServiceIcon(category) {
-    const icons = {
-        repair: 'fa-tools', assembly: 'fa-computer', upgrade: 'fa-arrow-up',
-        software: 'fa-windows', recovery: 'fa-database', maintenance: 'fa-broom'
-    };
-    return icons[category] || 'fa-wrench';
+function update3DViewer() {
+    console.log('🔄 update3DViewer called');
+    
+    if (!pcViewer || !viewerReady) {
+        console.warn('⚠️ 3D viewer not ready, skipping update');
+        return;
+    }
+
+    const components = [];
+    for (const category in selectedParts) {
+        if (selectedParts[category]) {
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) {
+                components.push({
+                    name: part.i_name,
+                    category: part.i_category,
+                    brand: part.i_brand || '',
+                    price: part.i_price,
+                    quantity: 1,
+                    specs: getSpecsForComponent(part),
+                    image_path: part.i_image_path || null
+                });
+            }
+        }
+    }
+
+    if (components.length > 0) {
+        try {
+            pcViewer.displayComponents(components);
+            // Also update modal viewer if initialized
+            if (modalViewerInitialized && modalViewer) {
+                setTimeout(() => syncModalViewer(), 100);
+            }
+        } catch (error) {
+            console.error('❌ Error displaying components:', error);
+        }
+    } else {
+        try {
+            pcViewer.showEmptyState();
+            if (modalViewerInitialized && modalViewer) {
+                modalViewer.showEmptyState();
+            }
+        } catch (error) {
+            console.error('❌ Error showing empty state:', error);
+        }
+    }
 }
 
-// ===== SELECT FOR BUILD =====
+// ============================================
+// MODAL 3D VIEWER
+// ============================================
+
+function initializeModalViewer() {
+    console.log('🎬 Initializing Modal 3D Viewer...');
+    
+    const container = document.getElementById('pc3dModalViewer');
+    if (!container) {
+        console.warn('⚠️ Modal viewer container not found');
+        return;
+    }
+
+    try {
+        modalViewer = new Pc3DViewer();
+        modalViewer.containerId = 'pc3dModalViewer';
+        modalViewer.container = container;
+        
+        modalViewer.init('pc3dModalViewer').then(() => {
+            console.log('✅ Modal 3D Viewer initialized');
+            modalViewerInitialized = true;
+            syncModalViewer();
+        }).catch(err => {
+            console.error('❌ Failed to initialize modal viewer:', err);
+            modalViewerInitialized = false;
+        });
+    } catch (error) {
+        console.error('❌ Error creating modal viewer:', error);
+        modalViewerInitialized = false;
+    }
+}
+
+function syncModalViewer() {
+    if (!modalViewerInitialized || !modalViewer) return;
+
+    const components = [];
+    for (const category in selectedParts) {
+        if (selectedParts[category]) {
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) {
+                components.push({
+                    name: part.i_name,
+                    category: part.i_category,
+                    brand: part.i_brand || '',
+                    price: part.i_price,
+                    quantity: 1,
+                    specs: getSpecsForComponent(part),
+                    image_path: part.i_image_path || null
+                });
+            }
+        }
+    }
+
+    if (components.length > 0) {
+        modalViewer.displayComponents(components);
+    } else {
+        modalViewer.showEmptyState();
+    }
+}
+
+function expand3DViewer() {
+    console.log('🔍 Expanding 3D viewer...');
+    
+    const modal = document.getElementById('pc3dModal');
+    if (!modal) return;
+
+    if (!modalViewerInitialized) {
+        initializeModalViewer();
+    } else {
+        syncModalViewer();
+    }
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    const status = document.getElementById('modalRotateStatus');
+    if (status && modalViewer) {
+        const isRotating = modalViewer.autoRotate !== false;
+        status.innerHTML = isRotating ? 
+            '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' : 
+            '<i class="fas fa-pause"></i> Paused';
+    }
+}
+
+function close3DModal() {
+    const modal = document.getElementById('pc3dModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+function setup3DViewerEvents() {
+    const expandBtn = document.getElementById('expand3dBtn');
+    if (expandBtn) {
+        expandBtn.addEventListener('click', expand3DViewer);
+    }
+
+    const closeBtn = document.getElementById('pc3dModalClose');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', close3DModal);
+    }
+
+    const modal = document.getElementById('pc3dModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                close3DModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modalEl = document.getElementById('pc3dModal');
+            if (modalEl && modalEl.style.display === 'flex') {
+                close3DModal();
+            }
+        }
+        if (e.key === ' ' && document.getElementById('pc3dModal')?.style.display === 'flex') {
+            e.preventDefault();
+            if (modalViewer) {
+                modalViewer.autoRotate = !modalViewer.autoRotate;
+                if (modalViewer.controls) {
+                    modalViewer.controls.autoRotate = modalViewer.autoRotate;
+                }
+                const status = document.getElementById('modalRotateStatus');
+                if (status) {
+                    status.innerHTML = modalViewer.autoRotate ? 
+                        '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' : 
+                        '<i class="fas fa-pause"></i> Paused';
+                }
+            }
+        }
+    });
+}
+
+// ============================================
+// SELECT FOR BUILD
+// ============================================
+
 window.selectForBuild = async function(productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
@@ -278,6 +740,7 @@ window.selectForBuild = async function(productId) {
         updateSelectedPartsDisplay();
         updateBuildSummary();
         renderProducts(getCurrentCategory());
+        setTimeout(() => update3DViewer(), 100);
         return;
     }
     
@@ -291,7 +754,15 @@ window.selectForBuild = async function(productId) {
     updateSelectedPartsDisplay();
     updateBuildSummary();
     renderProducts(getCurrentCategory());
+    
+    setTimeout(() => {
+        update3DViewer();
+    }, 200);
 };
+
+// ============================================
+// BUILD SUMMARY FUNCTIONS
+// ============================================
 
 function resetCompleteButton() {
     const btn = document.getElementById('completeBuildBtn');
@@ -300,6 +771,74 @@ function resetCompleteButton() {
         btn.style.background = '#00d4ff';
     }
 }
+
+function updateSelectedPartsDisplay() {
+    const display = document.getElementById('selectedPartsDisplay');
+    if (!display) return;
+    
+    const parts = [];
+    for (const category in selectedParts) {
+        if (selectedParts[category]) {
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) parts.push(`${category.toUpperCase()}: ${part.i_name}`);
+        }
+    }
+    display.textContent = parts.length ? parts.join(' | ') : 'Start by selecting a CPU or Motherboard';
+}
+
+function updateBuildSummary() {
+    const summaryList = document.getElementById('buildSummaryList');
+    const buildTotal = document.getElementById('buildTotal');
+    if (!summaryList || !buildTotal) return;
+    
+    let total = 0;
+    let html = '';
+    let partCount = 0;
+    
+    for (const category in selectedParts) {
+        if (selectedParts[category]) {
+            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+            if (part) {
+                total += parseFloat(part.i_price);
+                partCount++;
+                html += `
+                    <div class="build-item">
+                        <div>
+                            <div class="build-item-category">${category}</div>
+                            <div class="build-item-name">${part.i_name}</div>
+                        </div>
+                        <div class="build-item-price">RM ${part.i_price}</div>
+                        <button onclick="window.removeFromBuild('${category}')" style="background:none;border:none;color:#f44336;cursor:pointer;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    if (!html) {
+        html = '<p class="empty-build">No components selected</p>';
+    } else {
+        html = `<div style="font-size:12px;color:#888;padding:4px 0 8px 0;">${partCount} parts selected</div>` + html;
+    }
+    summaryList.innerHTML = html;
+    buildTotal.textContent = `RM ${total.toFixed(2)}`;
+}
+
+window.removeFromBuild = function(category) {
+    selectedParts[category] = null;
+    buildCompleted = false;
+    resetCompleteButton();
+    updateSelectedPartsDisplay();
+    updateBuildSummary();
+    renderProducts(getCurrentCategory());
+    setTimeout(() => update3DViewer(), 100);
+};
+
+// ============================================
+// COMPATIBILITY FUNCTIONS
+// ============================================
 
 async function checkCompatibility(newPart) {
     let isCompatible = true;
@@ -360,108 +899,281 @@ function showModal(title, message, suggestion = '') {
     modal.style.display = 'flex';
 }
 
-function updateSelectedPartsDisplay() {
-    const display = document.getElementById('selectedPartsDisplay');
-    if (!display) return;
+// ============================================
+// SERVICES
+// ============================================
+
+function renderServices() {
+    const servicesGrid = document.getElementById('servicesGrid');
+    if (!servicesGrid) return;
     
-    const parts = [];
-    for (const category in selectedParts) {
-        if (selectedParts[category]) {
-            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
-            if (part) parts.push(`${category.toUpperCase()}: ${part.i_name}`);
-        }
-    }
-    display.textContent = parts.length ? parts.join(' | ') : 'Start by selecting a CPU or Motherboard';
+    servicesGrid.innerHTML = servicesData.map(service => `
+        <div class="service-card">
+            <i class="fas ${getServiceIcon(service.service_category)}"></i>
+            <h4>${service.service_name}</h4>
+            <p>${service.service_duration || 'Contact for duration'}</p>
+            <div class="service-price">RM ${service.service_price}</div>
+            <button class="btn-book" onclick="window.bookService(${service.service_id})">Book Now</button>
+        </div>
+    `).join('');
 }
 
-function updateBuildSummary() {
-    const summaryList = document.getElementById('buildSummaryList');
-    const buildTotal = document.getElementById('buildTotal');
-    if (!summaryList || !buildTotal) return;
-    
-    let total = 0;
-    let html = '';
-    
-    for (const category in selectedParts) {
-        if (selectedParts[category]) {
-            const part = inventoryData.find(p => p.i_id === selectedParts[category]);
-            if (part) {
-                total += parseFloat(part.i_price);
-                html += `
-                    <div class="build-item">
-                        <div>
-                            <div class="build-item-category">${category}</div>
-                            <div class="build-item-name">${part.i_name}</div>
-                        </div>
-                        <div class="build-item-price">RM ${part.i_price}</div>
-                        <button onclick="window.removeFromBuild('${category}')" style="background:none;border:none;color:#f44336;cursor:pointer;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
-            }
-        }
-    }
-    
-    if (!html) html = '<p class="empty-build">No components selected</p>';
-    summaryList.innerHTML = html;
-    buildTotal.textContent = `RM ${total}`;
+function getServiceIcon(category) {
+    const icons = {
+        repair: 'fa-tools', assembly: 'fa-computer', upgrade: 'fa-arrow-up',
+        software: 'fa-windows', recovery: 'fa-database', maintenance: 'fa-broom'
+    };
+    return icons[category] || 'fa-wrench';
 }
-
-window.removeFromBuild = function(category) {
-    selectedParts[category] = null;
-    buildCompleted = false;
-    resetCompleteButton();
-    updateSelectedPartsDisplay();
-    updateBuildSummary();
-    renderProducts(getCurrentCategory());
-};
-
-// ===== ADD TO CART =====
-window.addToCart = async function(productId) {
-    try {
-        const product = inventoryData.find(p => p.i_id === productId);
-        if (!product) return;
-        
-        await addToCartUtil({
-            type: 'product',
-            id: productId,
-            name: product.i_name,
-            price: product.i_price
-        });
-        
-        await updateCartCountDisplay();
-        showModal('Added to Cart!', `${product.i_name} has been added to your cart.`);
-    } catch (error) {
-        console.error('Error adding to cart:', error);
-        showError('Failed to add item to cart');
-    }
-};
 
 window.bookService = async function(serviceId) {
     try {
-        const service = servicesData.find(s => s.service_id === serviceId);
-        if (!service) return;
+        console.log('📚 Booking service:', serviceId);
         
-        await addToCartUtil({
-            type: 'service',
-            id: serviceId,
-            name: service.service_name,
-            price: service.service_price
-        });
+        const service = servicesData.find(s => s.service_id === serviceId);
+        if (!service) {
+            showToast('Service not found.', 'error');
+            return;
+        }
+        
+        console.log('📦 Service found:', service);
+        
+        // Ensure we have a cart
+        await dataService.ensureInitialized();
+        let cartId = dataService.currentCartId;
+        
+        if (!cartId) {
+            cartId = await dataService.createNewCart();
+        }
+        
+        if (!cartId) {
+            showToast('Failed to create cart.', 'error');
+            return;
+        }
+        
+        console.log('🛒 Cart ID:', cartId);
+        
+        // Check if service already exists in cart
+        const { data: existing, error: checkError } = await supabase
+            .from('cart_service')
+            .select('cs_id')
+            .eq('cart_id', cartId)
+            .eq('service_id', serviceId)
+            .maybeSingle();
+        
+        if (checkError) {
+            console.error('Error checking existing service:', checkError);
+        }
+        
+        if (existing) {
+            showToast(`${service.service_name} is already in your cart.`, 'warning');
+            return;
+        }
+        
+        // ============================================
+        // FIX: Insert with correct service_id
+        // ============================================
+        const { data: insertData, error: insertError } = await supabase
+            .from('cart_service')
+            .insert({
+                cart_id: cartId,
+                service_id: serviceId  // Make sure this is the actual service_id, not null
+            })
+            .select();
+        
+        if (insertError) {
+            console.error('Error inserting service:', insertError);
+            showToast('Failed to book service: ' + insertError.message, 'error');
+            return;
+        }
+        
+        console.log('✅ Service inserted:', insertData);
+        
+        // Also add to local cart for display
+        const localCart = getLocalCart();
+        const existingLocal = localCart.find(item => item.type === 'service' && item.id === serviceId);
+        if (!existingLocal) {
+            localCart.push({
+                type: 'service',
+                id: serviceId,
+                name: service.service_name,
+                price: service.service_price,
+                quantity: 1
+            });
+            saveLocalCart(localCart);
+        }
         
         await updateCartCountDisplay();
-        showModal('Service Booked!', `${service.service_name} has been added to cart.`);
+        showModal('Service Booked!', `${service.service_name} has been added to your cart.`);
+        
     } catch (error) {
         console.error('Error booking service:', error);
-        showError('Failed to book service');
+        showToast('Failed to book service: ' + error.message, 'error');
     }
+};
+
+window.addToCart = async function(productId) {
+    try {
+        const product = inventoryData.find(p => p.i_id === productId);
+        if (!product) {
+            showToast('Product not found.', 'error');
+            return;
+        }
+        
+        // Ensure we have a cart
+        await dataService.ensureInitialized();
+        let cartId = dataService.currentCartId;
+        
+        if (!cartId) {
+            cartId = await dataService.createNewCart();
+        }
+        
+        if (!cartId) {
+            showToast('Failed to create cart.', 'error');
+            return;
+        }
+        
+        const quantity = 1;
+        const price = parseFloat(product.i_price);
+        const totalPrice = price * quantity;
+        
+        // Check if item already exists in cart
+        const { data: existing } = await supabase
+            .from('cart_items')
+            .select('ci_id, quantity')
+            .eq('cart_id', cartId)
+            .eq('i_id', productId)
+            .maybeSingle();
+        
+        if (existing) {
+            // Update existing
+            await supabase
+                .from('cart_items')
+                .update({
+                    quantity: existing.quantity + quantity,
+                    total_price: (existing.quantity + quantity) * price
+                })
+                .eq('ci_id', existing.ci_id);
+            showToast(`Updated ${product.i_name} quantity in cart!`, 'success');
+        } else {
+            // Insert new
+            await supabase
+                .from('cart_items')
+                .insert({
+                    cart_id: cartId,
+                    i_id: productId,
+                    quantity: quantity,
+                    total_price: totalPrice
+                });
+            showToast(`${product.i_name} added to cart!`, 'success');
+        }
+        
+        // Also add to local cart for display
+        const localCart = getLocalCart();
+        const existingLocal = localCart.find(item => item.type === 'product' && item.id === productId);
+        if (existingLocal) {
+            existingLocal.quantity += quantity;
+        } else {
+            localCart.push({
+                type: 'product',
+                id: productId,
+                name: product.i_name,
+                price: price,
+                quantity: quantity
+            });
+        }
+        saveLocalCart(localCart);
+        
+        await updateCartCountDisplay();
+        
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showToast('Failed to add item to cart: ' + error.message, 'error');
+    }
+};
+
+// ============================================
+// TOAST NOTIFICATION
+// ============================================
+
+function showToast(message, type = 'info') {
+    const existing = document.querySelector('.custom-toast');
+    if (existing) existing.remove();
+    
+    const colors = {
+        success: '#4CAF50',
+        error: '#f44336',
+        warning: '#ff9800',
+        info: '#00d4ff'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = 'custom-toast';
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background: ${colors[type] || '#1a1a2e'};
+        color: white;
+        padding: 14px 24px;
+        border-radius: 12px;
+        z-index: 99999;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+        animation: slideUp 0.4s ease;
+        max-width: 400px;
+        font-size: 14px;
+        font-weight: 500;
+    `;
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ============================================
+// SORTING
+// ============================================
+
+let currentSort = 'default';
+
+function sortProducts(products) {
+    const sorted = [...products];
+    switch (currentSort) {
+        case 'name-az': return sorted.sort((a, b) => (a.i_name || '').localeCompare(b.i_name || ''));
+        case 'name-za': return sorted.sort((a, b) => (b.i_name || '').localeCompare(a.i_name || ''));
+        case 'price-low': return sorted.sort((a, b) => parseFloat(a.i_price) - parseFloat(b.i_price));
+        case 'price-high': return sorted.sort((a, b) => parseFloat(b.i_price) - parseFloat(a.i_price));
+        case 'stock-high': return sorted.sort((a, b) => (b.i_quantity || 0) - (a.i_quantity || 0));
+        case 'stock-low': return sorted.sort((a, b) => (a.i_quantity || 0) - (b.i_quantity || 0));
+        case 'brand-az': return sorted.sort((a, b) => (a.i_brand || '').localeCompare(b.i_brand || ''));
+        default: return sorted;
+    }
+}
+
+window.setSort = function(sortType) {
+    currentSort = sortType;
+    document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
+    document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
+    renderProducts(getCurrentCategory());
 };
 
 function getCurrentCategory() {
     const activeCategory = document.querySelector('.category-item.active');
     return activeCategory ? activeCategory.dataset.category : 'all';
 }
+
+window.selectBuilderCategory = function(category) {
+    renderProducts(category);
+};
+
+// ============================================
+// SETUP LISTENERS
+// ============================================
 
 function setupBuilderListeners() {
     document.querySelectorAll('.category-item').forEach(item => {
@@ -471,13 +1183,6 @@ function setupBuilderListeners() {
             renderProducts(item.dataset.category);
         });
     });
-    
-    const compatibilityToggle = document.getElementById('compatibilityMode');
-    if (compatibilityToggle) {
-        compatibilityToggle.addEventListener('change', (e) => {
-            compatibilityMode = e.target.checked;
-        });
-    }
     
     const completeBtn = document.getElementById('completeBuildBtn');
     if (completeBtn) {
@@ -494,17 +1199,94 @@ function setupBuilderListeners() {
                 return;
             }
             
-            for (const category in selectedParts) {
-                if (selectedParts[category]) {
-                    await addToCart(selectedParts[category]);
+            try {
+                // Get current user/session
+                const user = getUser();
+                
+                // Ensure we have a cart
+                await dataService.ensureInitialized();
+                let cartId = dataService.currentCartId;
+                
+                if (!cartId) {
+                    cartId = await dataService.createNewCart();
                 }
+                
+                if (!cartId) {
+                    showModal('Error', 'Failed to create cart. Please try again.');
+                    return;
+                }
+                
+                let addedCount = 0;
+                let totalPrice = 0;
+                const addedParts = [];
+                
+                // Add each selected part to cart_items
+                for (const category in selectedParts) {
+                    if (selectedParts[category]) {
+                        const part = inventoryData.find(p => p.i_id === selectedParts[category]);
+                        if (part) {
+                            const quantity = 1;
+                            const price = parseFloat(part.i_price);
+                            const itemTotal = price * quantity;
+                            totalPrice += itemTotal;
+                            
+                            // Check if item already exists in cart
+                            const { data: existing } = await supabase
+                                .from('cart_items')
+                                .select('ci_id, quantity')
+                                .eq('cart_id', cartId)
+                                .eq('i_id', part.i_id)
+                                .maybeSingle();
+                            
+                            if (existing) {
+                                // Update existing
+                                await supabase
+                                    .from('cart_items')
+                                    .update({
+                                        quantity: existing.quantity + quantity,
+                                        total_price: (existing.quantity + quantity) * price
+                                    })
+                                    .eq('ci_id', existing.ci_id);
+                            } else {
+                                // Insert new
+                                await supabase
+                                    .from('cart_items')
+                                    .insert({
+                                        cart_id: cartId,
+                                        i_id: part.i_id,
+                                        quantity: quantity,
+                                        total_price: itemTotal
+                                    });
+                            }
+                            
+                            addedCount++;
+                            addedParts.push(part.i_name);
+                        }
+                    }
+                }
+                
+                if (addedCount > 0) {
+                    buildCompleted = true;
+                    document.getElementById('completeBuildBtn').innerHTML = 
+                        `<i class="fas fa-check"></i> Added (${addedCount} parts, RM ${totalPrice.toFixed(2)})`;
+                    document.getElementById('completeBuildBtn').style.background = '#4CAF50';
+                    
+                    // Update cart count
+                    await updateCartCountDisplay();
+                    
+                    showModal(
+                        'Build Complete! 🎉', 
+                        `Added ${addedCount} parts to your cart.\nTotal: RM ${totalPrice.toFixed(2)}\n\nParts: ${addedParts.join(', ')}`,
+                        'Review your cart to checkout.'
+                    );
+                } else {
+                    showModal('Error', 'No parts were added to the cart.');
+                }
+                
+            } catch (error) {
+                console.error('Error adding build to cart:', error);
+                showModal('Error', 'Failed to add parts to cart: ' + error.message);
             }
-            
-            buildCompleted = true;
-            document.getElementById('completeBuildBtn').innerHTML = '<i class="fas fa-check"></i> Added to Cart';
-            document.getElementById('completeBuildBtn').style.background = '#4CAF50';
-            
-            showModal('Build Complete!', 'All selected parts added to cart.', 'Review your cart to checkout.');
         });
     }
     
@@ -556,7 +1338,6 @@ function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff98
     document.getElementById('popupCloseBtn').onclick = close;
     overlay.onclick = (e) => { if (e.target === overlay) close(); };
     
-    // Add animations if not already present
     if (!document.getElementById('popupStyles')) {
         const style = document.createElement('style');
         style.id = 'popupStyles';
@@ -568,35 +1349,10 @@ function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff98
     }
 }
 
-// ===== SORTING =====
-let currentSort = 'default';
+// ============================================
+// AI COMPATIBILITY CHECK
+// ============================================
 
-function sortProducts(products) {
-    const sorted = [...products];
-    switch (currentSort) {
-        case 'name-az': return sorted.sort((a, b) => (a.i_name || '').localeCompare(b.i_name || ''));
-        case 'name-za': return sorted.sort((a, b) => (b.i_name || '').localeCompare(a.i_name || ''));
-        case 'price-low': return sorted.sort((a, b) => parseFloat(a.i_price) - parseFloat(b.i_price));
-        case 'price-high': return sorted.sort((a, b) => parseFloat(b.i_price) - parseFloat(a.i_price));
-        case 'stock-high': return sorted.sort((a, b) => (b.i_quantity || 0) - (a.i_quantity || 0));
-        case 'stock-low': return sorted.sort((a, b) => (a.i_quantity || 0) - (b.i_quantity || 0));
-        case 'brand-az': return sorted.sort((a, b) => (a.i_brand || '').localeCompare(b.i_brand || ''));
-        default: return sorted;
-    }
-}
-
-window.setSort = function(sortType) {
-    currentSort = sortType;
-    document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
-    document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
-    renderProducts(getCurrentCategory());
-};
-
-window.selectBuilderCategory = function(category) {
-    renderProducts(category);
-};
-
-// ===== AI COMPATIBILITY CHECK =====
 window.runAICompatibility = async function() {
     const parts = [];
     for (const cat in selectedParts) {
@@ -643,7 +1399,6 @@ window.runAICompatibility = async function() {
         return;
     }
     
-    // Show panel
     const panel = document.getElementById('aiResultPanel');
     const statusEl = document.getElementById('compatibilityStatus');
     const detailsEl = document.getElementById('aiDetails');
@@ -769,270 +1524,16 @@ function getPartRole(cat) {
     return roles[(cat || '').toLowerCase()] || 'PC component';
 }
 
-console.log('✅ script.js loaded successfully');
+// ============================================
+// EXPOSE GLOBALLY
+// ============================================
 
-// ===== EXPOSE FUNCTIONS GLOBALLY =====
 window.getProductImageUrl = getProductImageUrl;
 window.inventoryData = inventoryData;
+window.update3DViewer = update3DViewer;
+window.initialize3DViewer = initialize3DViewer;
+window.expand3DViewer = expand3DViewer;
+window.close3DModal = close3DModal;
+window.selectedParts = selectedParts;
 
-// ===== DEBUG FUNCTIONS =====
-
-// Debug function for checking images
-window.debugImages = async function() {
-    try {
-        // Check if supabase is available
-        if (typeof supabase === 'undefined') {
-            console.error('❌ Supabase is not defined! Make sure it\'s imported.');
-            return;
-        }
-        
-        console.log('🔍 Checking images in bucket...');
-        
-        // Use the correct storage syntax
-        const { data, error } = await supabase
-            .storage
-            .from('images')
-            .list('');
-        
-        if (error) {
-            console.error('❌ Error listing bucket:', error);
-            console.log('💡 Make sure the "images" bucket exists and is public.');
-            return;
-        }
-        
-        if (!data || data.length === 0) {
-            console.log('📁 No files found in "images" bucket.');
-            return;
-        }
-        
-        console.log(`📁 Found ${data.length} files in "images" bucket:`);
-        data.forEach(file => {
-            console.log(`   📷 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-        });
-        
-        // Check if inventoryData is available
-        if (!inventoryData || inventoryData.length === 0) {
-            console.warn('⚠️ No inventory data loaded. Run loadInitialData() first.');
-            return data;
-        }
-        
-        // Check each inventory item against the bucket
-        console.log('\n🔍 Checking inventory items:');
-        const itemsWithImages = inventoryData.filter(p => p.i_image_path && !p.i_image_path.startsWith('http'));
-        
-        if (itemsWithImages.length === 0) {
-            console.log('ℹ️ No items with image paths found.');
-            return data;
-        }
-        
-        const bucketFiles = data.map(f => f.name);
-        let foundCount = 0;
-        let missingItems = [];
-        
-        for (const item of itemsWithImages) {
-            const filename = item.i_image_path;
-            const exists = bucketFiles.includes(filename);
-            
-            if (exists) {
-                foundCount++;
-                console.log(`   ✅ ${item.i_name}: ${filename}`);
-            } else {
-                missingItems.push(item);
-                console.log(`   ❌ ${item.i_name}: ${filename} (NOT FOUND)`);
-                
-                // Suggest possible matches
-                const searchTerm = item.i_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const suggestions = data.filter(f => {
-                    const fName = f.name.toLowerCase().replace(/\.[^.]+$/, '').replace(/[^a-z0-9]/g, '');
-                    return fName.includes(searchTerm) || searchTerm.includes(fName);
-                });
-                
-                if (suggestions.length > 0) {
-                    console.log(`      💡 Did you mean: ${suggestions.map(s => s.name).join(', ')}`);
-                }
-            }
-        }
-        
-        console.log(`\n📊 Summary: ${foundCount}/${itemsWithImages.length} images found`);
-        
-        if (missingItems.length > 0) {
-            console.log('\n🔧 To fix missing images, run this SQL:');
-            console.log('-- Update each missing image with the correct filename');
-            missingItems.forEach(item => {
-                console.log(`UPDATE public.inventory SET i_image_path = 'correct-filename.jpg' WHERE i_id = ${item.i_id};`);
-            });
-        }
-        
-        return data;
-        
-    } catch (error) {
-        console.error('❌ Error in debugImages:', error);
-        console.log('💡 Make sure you\'re on the builder page with inventory loaded.');
-    }
-};
-
-// Quick image check function
-window.checkImage = async function(filename) {
-    try {
-        if (typeof supabase === 'undefined') {
-            console.error('❌ Supabase is not defined!');
-            return false;
-        }
-        
-        // Use the correct storage syntax
-        const { data } = supabase
-            .storage
-            .from('images')
-            .getPublicUrl(filename);
-        
-        const url = data.publicUrl;
-        
-        console.log(`📷 Checking: ${filename}`);
-        console.log(`🔗 URL: ${url}`);
-        
-        const response = await fetch(url, { method: 'HEAD' });
-        console.log(`   ${response.ok ? '✅ EXISTS' : '❌ NOT FOUND'} (Status: ${response.status})`);
-        
-        return response.ok;
-    } catch (error) {
-        console.error(`❌ Error checking ${filename}:`, error);
-        return false;
-    }
-};
-
-// List all images in bucket
-window.listImages = async function() {
-    try {
-        if (typeof supabase === 'undefined') {
-            console.error('❌ Supabase is not defined!');
-            return;
-        }
-        
-        // Use the correct storage syntax
-        const { data, error } = await supabase
-            .storage
-            .from('images')
-            .list('');
-        
-        if (error) {
-            console.error('❌ Error listing bucket:', error);
-            return;
-        }
-        
-        if (!data || data.length === 0) {
-            console.log('📁 No images found in bucket.');
-            return [];
-        }
-        
-        console.log(`📁 ${data.length} images in bucket:`);
-        data.forEach(f => console.log(`   📷 ${f.name}`));
-        return data;
-    } catch (error) {
-        console.error('❌ Error:', error);
-    }
-};
-
-// Check all images for a specific category
-window.checkCategoryImages = async function(category) {
-    try {
-        if (typeof supabase === 'undefined') {
-            console.error('❌ Supabase is not defined!');
-            return;
-        }
-        
-        if (!inventoryData || inventoryData.length === 0) {
-            console.warn('⚠️ No inventory data loaded.');
-            return;
-        }
-        
-        const items = inventoryData.filter(p => 
-            p.i_category === category && 
-            p.i_image_path && 
-            !p.i_image_path.startsWith('http')
-        );
-        
-        if (items.length === 0) {
-            console.log(`ℹ️ No items with images found in category: ${category}`);
-            return;
-        }
-        
-        console.log(`🔍 Checking ${items.length} items in category "${category}":`);
-        
-        for (const item of items) {
-            await window.checkImage(item.i_image_path);
-        }
-    } catch (error) {
-        console.error('❌ Error:', error);
-    }
-};
-
-// Fix image path for a specific item
-window.fixImagePath = async function(itemId, correctFilename) {
-    try {
-        // Check if the image exists first
-        const exists = await window.checkImage(correctFilename);
-        
-        if (!exists) {
-            console.warn(`⚠️ Warning: ${correctFilename} does not exist in the bucket.`);
-            const confirm = window.confirm(`"${correctFilename}" doesn't exist. Do you want to update anyway?`);
-            if (!confirm) return;
-        }
-        
-        // Update the database
-        const { data, error } = await supabase
-            .from('inventory')
-            .update({ i_image_path: correctFilename })
-            .eq('i_id', itemId)
-            .select();
-        
-        if (error) {
-            console.error('❌ Error updating database:', error);
-            return;
-        }
-        
-        console.log(`✅ Updated item ${itemId} to use: ${correctFilename}`);
-        
-        // Refresh inventory data
-        inventoryData = await dataService.getInventory();
-        renderProducts(getCurrentCategory());
-        
-        return data;
-    } catch (error) {
-        console.error('❌ Error:', error);
-    }
-};
-
-// Upload a file to the bucket (for debugging)
-window.uploadTestImage = async function(file, filename) {
-    try {
-        if (typeof supabase === 'undefined') {
-            console.error('❌ Supabase is not defined!');
-            return;
-        }
-        
-        const { data, error } = await supabase
-            .storage
-            .from('images')
-            .upload(filename, file, {
-                cacheControl: '3600',
-                upsert: true
-            });
-        
-        if (error) {
-            console.error('❌ Error uploading:', error);
-            return;
-        }
-        
-        console.log(`✅ Uploaded: ${filename}`);
-        return data;
-    } catch (error) {
-        console.error('❌ Error:', error);
-    }
-};
-
-console.log('✅ Debug functions loaded. Run:');
-console.log('   await window.listImages() - List all images in bucket');
-console.log('   await window.debugImages() - Check all inventory items against bucket');
-console.log('   await window.checkImage("filename.jpg") - Check a specific image');
-console.log('   await window.checkCategoryImages("cpu") - Check images for a category');
-console.log('   await window.fixImagePath(itemId, "correct-filename.jpg") - Fix a specific item');
+console.log('✅ script.js loaded with 3D viewer debug');

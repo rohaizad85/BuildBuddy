@@ -4,13 +4,19 @@ import SUPABASE_CONFIG from '../config/config.js';
 
 class SupabaseClient {
     constructor() {
-        this.url = SUPABASE_CONFIG.url;
-        this.anonKey = SUPABASE_CONFIG.anonKey;
-        this.headers = {
+        // Get config values with fallbacks
+        this.url = SUPABASE_CONFIG.supabase?.url || 'https://kkloxbmybhoawojaovtj.supabase.co';
+        this.anonKey = SUPABASE_CONFIG.supabase?.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrbG94Ym15YmhvYXdvamFvdnRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTUwMjQsImV4cCI6MjA5MjA5MTAyNH0.EMFgfc4f1jEdZ1Iv6FnCA01v_jdjYXIMTlGyNRLTeeo';
+        
+        console.log('🔗 Supabase URL:', this.url);
+        console.log('🔑 Supabase Key:', this.anonKey ? 'Set (length: ' + this.anonKey.length + ')' : 'Missing');
+        
+        // ✅ Make sure headers are created fresh each time with the current key
+        this.getHeaders = () => ({
             'apikey': this.anonKey,
             'Authorization': `Bearer ${this.anonKey}`,
             'Content-Type': 'application/json'
-        };
+        });
 
         // Storage API
         this.storage = {
@@ -32,7 +38,7 @@ class SupabaseStorageClient {
     }
 
     getPublicUrl(path) {
-        const url = `${this.client.url}/storage/v1/object/public/${this.bucket}/${path}`;
+        const url = `${this.client.url}/storage/v1/object/public/${this.bucket}/${encodeURIComponent(path)}`;
         return { data: { publicUrl: url } };
     }
 
@@ -42,11 +48,7 @@ class SupabaseStorageClient {
 
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'apikey': this.client.anonKey,
-                    'Authorization': `Bearer ${this.client.anonKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: this.client.getHeaders(),
                 body: JSON.stringify({ prefix: path })
             });
 
@@ -64,7 +66,7 @@ class SupabaseStorageClient {
 
     async upload(path, file, options = {}) {
         try {
-            const url = `${this.client.url}/storage/v1/object/${this.bucket}/${path}`;
+            const url = `${this.client.url}/storage/v1/object/${this.bucket}/${encodeURIComponent(path)}`;
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -193,12 +195,10 @@ class SupabaseQueryBuilder {
         return this;
     }
 
-    // ===== NEW: IN OPERATOR =====
     in(column, values) {
         if (!Array.isArray(values) || values.length === 0) {
             throw new Error('in() requires a non-empty array');
         }
-        // For string values, wrap in quotes
         const valueString = values.map(v => {
             if (typeof v === 'string') return `"${v}"`;
             return v;
@@ -207,7 +207,6 @@ class SupabaseQueryBuilder {
         return this;
     }
 
-    // ===== NEW: IS OPERATOR =====
     is(column, value) {
         if (value === null) {
             this.filters.push({ column, operator: 'is', value: 'null' });
@@ -219,7 +218,6 @@ class SupabaseQueryBuilder {
         return this;
     }
 
-    // ===== NEW: NOT OPERATOR =====
     not(column, operator, value) {
         this.filters.push({ column, operator: `not.${operator}`, value });
         return this;
@@ -276,7 +274,6 @@ class SupabaseQueryBuilder {
 
         this.filters.forEach(filter => {
             let value = filter.value;
-            // Handle special operators
             if (filter.operator === 'is') {
                 url += `&${filter.column}=is.${value}`;
                 return;
@@ -287,7 +284,6 @@ class SupabaseQueryBuilder {
                 url += `&${filter.column}=${filter.operator}.${value}`;
                 return;
             }
-            // Regular operator
             url += `&${filter.column}=${filter.operator}.${encodeURIComponent(String(value))}`;
         });
 
@@ -307,16 +303,17 @@ class SupabaseQueryBuilder {
         const params = [];
 
         this.filters.forEach(filter => {
-            let value = filter.value;
             if (filter.operator === 'is') {
-                params.push(`${filter.column}=is.${value}`);
+                params.push(`${filter.column}=is.${filter.value}`);
+                return;
             } else if (filter.operator === 'in') {
-                params.push(`${filter.column}=in.${value}`);
+                params.push(`${filter.column}=in.${filter.value}`);
+                return;
             } else if (filter.operator.startsWith('not.')) {
-                params.push(`${filter.column}=${filter.operator}.${value}`);
-            } else {
-                params.push(`${filter.column}=${filter.operator}.${encodeURIComponent(String(value))}`);
+                params.push(`${filter.column}=${filter.operator}.${encodeURIComponent(String(filter.value))}`);
+                return;
             }
+            params.push(`${filter.column}=${filter.operator}.${encodeURIComponent(String(filter.value))}`);
         });
 
         url += params.join('&');
@@ -328,11 +325,12 @@ class SupabaseQueryBuilder {
 
         const response = await fetch(url, {
             method: 'GET',
-            headers: this.client.headers
+            headers: this.client.getHeaders()
         });
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ SELECT error:', response.status, errorText);
             const error = new Error(`HTTP ${response.status}: ${errorText}`);
             return { data: null, error };
         }
@@ -351,11 +349,13 @@ class SupabaseQueryBuilder {
 
     async executeInsert() {
         const url = `${this.client.url}/rest/v1/${this.table}`;
+        console.log(`📡 INSERT: ${url}`);
+        console.log(`📦 Data:`, this.insertData);
 
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                ...this.client.headers,
+                ...this.client.getHeaders(),
                 'Prefer': 'return=minimal'
             },
             body: JSON.stringify(Array.isArray(this.insertData) ? this.insertData : [this.insertData])
@@ -363,15 +363,33 @@ class SupabaseQueryBuilder {
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ INSERT error:', response.status, errorText);
             const error = new Error(`HTTP ${response.status}: ${errorText}`);
             return { data: null, error };
         }
 
-        const fetchUrl = `${this.client.url}/rest/v1/${this.table}?select=*&order=i_id.desc&limit=1`;
+        // Fetch the inserted record(s)
+        const primaryKeyMap = {
+            'inventory': 'i_id',
+            'cart': 'cart_id',
+            'cart_items': 'ci_id',
+            'cart_service': 'cs_id',
+            'service_orders': 'order_id',
+            'service_order_images': 'image_id',
+            'users': 'user_id',
+            'payment': 'payment_id',
+            'service': 'service_id',
+            'bundles': 'bundle_id',
+            'usersession': 'session_id'
+        };
+
+        const orderColumn = primaryKeyMap[this.table] || 'id';
+
+        const fetchUrl = `${this.client.url}/rest/v1/${this.table}?select=*&order=${orderColumn}.desc&limit=${Array.isArray(this.insertData) ? this.insertData.length : 1}`;
 
         const fetchResponse = await fetch(fetchUrl, {
             method: 'GET',
-            headers: this.client.headers
+            headers: this.client.getHeaders()
         });
 
         if (!fetchResponse.ok) {
@@ -396,11 +414,13 @@ class SupabaseQueryBuilder {
         }
 
         const url = this.buildFilterUrl();
+        console.log(`📡 UPDATE: ${url}`);
+        console.log(`📦 Data:`, this.updateData);
 
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
-                ...this.client.headers,
+                ...this.client.getHeaders(),
                 'Prefer': 'return=representation'
             },
             body: JSON.stringify(this.updateData)
@@ -408,6 +428,7 @@ class SupabaseQueryBuilder {
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ UPDATE error:', response.status, errorText);
             const error = new Error(`HTTP ${response.status}: ${errorText}`);
             return { data: null, error };
         }
@@ -430,10 +451,11 @@ class SupabaseQueryBuilder {
         }
 
         const url = this.buildFilterUrl();
+        console.log(`📡 DELETE: ${url}`);
 
         const response = await fetch(url, {
             method: 'DELETE',
-            headers: this.client.headers
+            headers: this.client.getHeaders()
         });
 
         if (response.status === 204) {
@@ -442,6 +464,7 @@ class SupabaseQueryBuilder {
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('❌ DELETE error:', response.status, errorText);
             const error = new Error(`HTTP ${response.status}: ${errorText}`);
             return { data: null, error };
         }
@@ -485,4 +508,5 @@ class SupabaseQueryBuilder {
 }
 
 const supabase = new SupabaseClient();
+console.log('✅ Supabase client initialized');
 export default supabase;

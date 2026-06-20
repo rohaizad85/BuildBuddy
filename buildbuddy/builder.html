@@ -1,420 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PC Builder - BuildBuddy</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/builder.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .category-dropdown { position: relative; margin-bottom: 20px; }
-        .category-toggle {
-            width: 100%; padding: 14px 18px; background: #1a1a2e; color: white;
-            border: none; border-radius: 12px; font-size: 15px; font-weight: 600;
-            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-            transition: all 0.3s; box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-        .category-toggle:hover { background: #16213e; }
-        .category-toggle i { transition: transform 0.3s; }
-        .category-toggle.open i { transform: rotate(180deg); }
-        
-        .category-menu {
-            position: absolute; top: 100%; left: 0; right: 0; background: white;
-            border-radius: 12px; margin-top: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            z-index: 100; overflow: hidden; max-height: 0; opacity: 0; transition: all 0.3s ease;
-        }
-        .category-menu.show { max-height: 500px; opacity: 1; }
-        .category-item {
-            padding: 13px 20px; cursor: pointer; transition: all 0.2s;
-            display: flex; align-items: center; gap: 12px; font-size: 14px;
-            font-weight: 500; color: #555; border-bottom: 1px solid #f0f0f5;
-        }
-        .category-item:last-child { border-bottom: none; }
-        .category-item:hover { background: #f0fdff; color: #1a1a2e; }
-        .category-item.active { background: #e0f7fa; color: #00a8cc; font-weight: 600; }
-        .category-item i { width: 20px; text-align: center; font-size: 14px; }
-        
-        .sort-dropdown { position: relative; margin-left: auto; }
-        .sort-menu {
-            display: none; position: absolute; top: 100%; right: 0; background: white;
-            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 50;
-            min-width: 200px; margin-top: 5px; overflow: hidden;
-        }
-        .sort-option {
-            padding: 10px 16px; cursor: pointer; font-size: 13px;
-            border-bottom: 1px solid #f0f0f5;
-        }
-        .sort-option:hover { background: #f0fdff; }
-        .sort-option.active { background: #e0f7fa; color: #00a8cc; font-weight: 600; }
-
-        /* Product card with image */
-        .product-card {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-        .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.12);
-        }
-        .product-card.selected {
-            border: 2px solid #00d4ff;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
-        }
-        .product-image {
-            width: 100%;
-            padding-top: 80%;
-            position: relative;
-            background: #f8f9fc;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-        .product-image img {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            padding: 10px;
-        }
-        .product-image .placeholder-icon {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #ccc;
-            width: 100%;
-            height: 100%;
-            background: #f8f9fc;
-        }
-        .product-image .placeholder-icon i {
-            font-size: 48px;
-            color: #00d4ff;
-            margin-bottom: 8px;
-        }
-        .product-image .placeholder-icon span {
-            font-size: 11px;
-            color: #999;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-        .product-badge {
-            display: inline-block;
-            padding: 2px 10px;
-            background: #00d4ff20;
-            color: #00a8cc;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-        .product-card h4 {
-            font-size: 15px;
-            margin: 0 0 4px 0;
-            color: #1a1a2e;
-        }
-        .product-specs {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 8px;
-        }
-        .product-price {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1a1a2e;
-            margin: 4px 0;
-        }
-        .product-stock {
-            font-size: 13px;
-            color: #4CAF50;
-            margin-bottom: 10px;
-        }
-        .product-stock.low-stock { color: #f44336; }
-        .product-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: auto;
-        }
-        .product-actions button {
-            flex: 1;
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .btn-select {
-            background: #e8f5e9;
-            color: #2e7d32;
-        }
-        .btn-select:hover {
-            background: #c8e6c9;
-        }
-        .btn-select.selected-btn {
-            background: #00d4ff;
-            color: #1a1a2e;
-        }
-        .btn-add {
-            background: #1a1a2e;
-            color: white;
-        }
-        .btn-add:hover {
-            background: #16213e;
-        }
-
-        /* Main layout */
-        .main-layout {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 30px;
-            margin: 30px 0;
-        }
-        .sidebar {
-            position: sticky;
-            top: 20px;
-            align-self: start;
-        }
-        .build-summary {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            margin-top: 20px;
-        }
-        .build-summary h3 {
-            margin: 0 0 15px 0;
-            color: #1a1a2e;
-        }
-        .build-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f5;
-            font-size: 13px;
-        }
-        .build-item-category {
-            font-weight: 600;
-            color: #00a8cc;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-        .build-item-name {
-            color: #555;
-        }
-        .build-item-price {
-            font-weight: 600;
-            color: #1a1a2e;
-        }
-        .build-total {
-            display: flex;
-            justify-content: space-between;
-            padding: 15px 0;
-            font-size: 18px;
-            font-weight: 700;
-            border-top: 2px solid #e0e0e0;
-            margin-top: 10px;
-        }
-        .empty-build {
-            color: #999;
-            text-align: center;
-            padding: 20px 0;
-        }
-        .btn-full {
-            width: 100%;
-            padding: 14px;
-            font-size: 16px;
-        }
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .section-header h2 {
-            margin: 0;
-            color: #1a1a2e;
-        }
-        .selected-parts-bar {
-            background: #f8f9fc;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            color: #555;
-        }
-        .selected-parts-bar i {
-            color: #00d4ff;
-        }
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 20px;
-        }
-        .builder-header {
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            color: white;
-            padding: 40px 0;
-            margin-bottom: 20px;
-        }
-        .builder-header h2 {
-            font-size: 32px;
-            margin: 10px 0 5px 0;
-        }
-        .builder-header p {
-            color: #ccc;
-        }
-        .back-link {
-            color: #ccc;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: color 0.3s;
-        }
-        .back-link:hover {
-            color: #00d4ff;
-        }
-        .btn-outline {
-            padding: 8px 16px;
-            background: transparent;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s;
-            color: #555;
-        }
-        .btn-outline:hover {
-            border-color: #00d4ff;
-            color: #00d4ff;
-        }
-        .btn-primary {
-            padding: 10px 20px;
-            background: #00d4ff;
-            color: #1a1a2e;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .btn-primary:hover {
-            background: #00b8e6;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
-        }
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-content {
-            background: white;
-            border-radius: 16px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 30px;
-            position: relative;
-        }
-        .close-modal {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            font-size: 28px;
-            cursor: pointer;
-            color: #999;
-            transition: color 0.3s;
-        }
-        .close-modal:hover {
-            color: #1a1a2e;
-        }
-        .modal-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        .modal-header i {
-            font-size: 24px;
-            color: #00d4ff;
-        }
-        .modal-header h3 {
-            margin: 0;
-            color: #1a1a2e;
-        }
-        .modal-body {
-            color: #555;
-        }
-
-        /* AI Status */
-        .ai-status {
-            padding: 15px;
-            border-radius: 8px;
-            background: #f8f9fc;
-        }
-        .ai-status.compatible {
-            background: #e8f5e9;
-            border: 1px solid #4CAF50;
-        }
-        .ai-status.incompatible {
-            background: #ffebee;
-            border: 1px solid #f44336;
-        }
-        .ai-status.checking {
-            background: #e3f2fd;
-            border: 1px solid #2196F3;
-        }
-
-        @media (max-width: 768px) {
-            .main-layout {
-                grid-template-columns: 1fr;
-            }
-            .sidebar {
-                position: static;
-            }
-            .products-grid {
-                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            }
-            .section-header {
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-            .section-header h2 {
-                font-size: 20px;
-            }
-        }
-    </style>
 </head>
+
 <body>
     <header class="header">
         <div class="container">
@@ -462,22 +57,48 @@
                             <i class="fas fa-chevron-down"></i>
                         </button>
                         <div class="category-menu" id="categoryMenu">
-                            <div class="category-item active" data-category="all" onclick="selectCategory('all', this)"><i class="fas fa-border-all"></i> All Products</div>
-                            <div class="category-item" data-category="cpu" onclick="selectCategory('cpu', this)"><i class="fas fa-microchip"></i> CPU</div>
-                            <div class="category-item" data-category="motherboard" onclick="selectCategory('motherboard', this)"><i class="fas fa-th"></i> Motherboard</div>
-                            <div class="category-item" data-category="ram" onclick="selectCategory('ram', this)"><i class="fas fa-memory"></i> RAM</div>
-                            <div class="category-item" data-category="gpu" onclick="selectCategory('gpu', this)"><i class="fas fa-tv"></i> GPU</div>
-                            <div class="category-item" data-category="psu" onclick="selectCategory('psu', this)"><i class="fas fa-plug"></i> PSU</div>
-                            <div class="category-item" data-category="storage" onclick="selectCategory('storage', this)"><i class="fas fa-hdd"></i> Storage</div>
-                            <div class="category-item" data-category="cooler" onclick="selectCategory('cooler', this)"><i class="fas fa-fan"></i> Cooler</div>
+                            <div class="category-item active" data-category="all" onclick="selectCategory('all', this)">
+                                <i class="fas fa-border-all"></i> All Products</div>
+                            <div class="category-item" data-category="cpu" onclick="selectCategory('cpu', this)"><i
+                                    class="fas fa-microchip"></i> CPU</div>
+                            <div class="category-item" data-category="motherboard"
+                                onclick="selectCategory('motherboard', this)"><i class="fas fa-th"></i> Motherboard
+                            </div>
+                            <div class="category-item" data-category="ram" onclick="selectCategory('ram', this)"><i
+                                    class="fas fa-memory"></i> RAM</div>
+                            <div class="category-item" data-category="gpu" onclick="selectCategory('gpu', this)"><i
+                                    class="fas fa-tv"></i> GPU</div>
+                            <div class="category-item" data-category="psu" onclick="selectCategory('psu', this)"><i
+                                    class="fas fa-plug"></i> PSU</div>
+                            <div class="category-item" data-category="storage"
+                                onclick="selectCategory('storage', this)"><i class="fas fa-hdd"></i> Storage</div>
+                            <div class="category-item" data-category="cooler" onclick="selectCategory('cooler', this)">
+                                <i class="fas fa-fan"></i> Cooler</div>
                         </div>
                     </div>
 
                     <div class="build-summary">
                         <h3>Your Build</h3>
-                        <div id="buildSummaryList"><p class="empty-build">No components selected</p></div>
+                        <div id="buildSummaryList">
+                            <p class="empty-build">No components selected</p>
+                        </div>
                         <div class="build-total"><span>Total:</span><span id="buildTotal">RM 0</span></div>
-                        <button class="btn-primary btn-full" id="completeBuildBtn"><i class="fas fa-check"></i> Complete Build</button>
+                        <button class="btn-primary btn-full" id="completeBuildBtn"><i class="fas fa-check"></i> Complete
+                            Build</button>
+                    </div>
+
+                    <!-- 3D Build Preview -->
+                    <div class="sidebar-3d-viewer">
+                        <div class="viewer-header">
+                            <h4><i class="fas fa-cube"></i> 3D Build Preview</h4>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:11px;color:#888;">Drag to rotate</span>
+                                <button id="expand3dBtn" class="expand-btn">
+                                    <i class="fas fa-expand"></i> Expand
+                                </button>
+                            </div>
+                        </div>
+                        <div id="sidebarPc3dViewer"></div>
                     </div>
                 </aside>
 
@@ -485,22 +106,36 @@
                     <div class="section-header">
                         <h2>Select Components</h2>
                         <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;">
-                            <button class="btn-primary" id="aiCheckBtn" onclick="window.runAICompatibility()" style="padding:8px 16px;font-size:13px;">
+                            <button class="btn-primary" id="aiCheckBtn" onclick="window.runAICompatibility()"
+                                style="padding:8px 16px;font-size:13px;">
                                 <i class="fas fa-robot"></i> AI Check
                             </button>
                             <div class="sort-dropdown">
-                                <button class="btn-outline" onclick="toggleSortDropdown()" style="padding:8px 14px;font-size:13px;">
+                                <button class="btn-outline" onclick="toggleSortDropdown()"
+                                    style="padding:8px 14px;font-size:13px;">
                                     <i class="fas fa-sort"></i> Sort
                                 </button>
                                 <div class="sort-menu" id="sortDropdown">
-                                    <div class="sort-option active" data-sort="default" onclick="window.setSort('default');toggleSortDropdown();">🔄 Default</div>
-                                    <div class="sort-option" data-sort="name-az" onclick="window.setSort('name-az');toggleSortDropdown();">🔤 Name A-Z</div>
-                                    <div class="sort-option" data-sort="name-za" onclick="window.setSort('name-za');toggleSortDropdown();">🔤 Name Z-A</div>
-                                    <div class="sort-option" data-sort="price-low" onclick="window.setSort('price-low');toggleSortDropdown();">💰 Price: Low-High</div>
-                                    <div class="sort-option" data-sort="price-high" onclick="window.setSort('price-high');toggleSortDropdown();">💰 Price: High-Low</div>
-                                    <div class="sort-option" data-sort="stock-high" onclick="window.setSort('stock-high');toggleSortDropdown();">📦 Stock: Highest</div>
-                                    <div class="sort-option" data-sort="stock-low" onclick="window.setSort('stock-low');toggleSortDropdown();">📦 Stock: Lowest</div>
-                                    <div class="sort-option" data-sort="brand-az" onclick="window.setSort('brand-az');toggleSortDropdown();">🏷️ Brand A-Z</div>
+                                    <div class="sort-option active" data-sort="default"
+                                        onclick="window.setSort('default');toggleSortDropdown();">🔄 Default</div>
+                                    <div class="sort-option" data-sort="name-az"
+                                        onclick="window.setSort('name-az');toggleSortDropdown();">🔤 Name A-Z</div>
+                                    <div class="sort-option" data-sort="name-za"
+                                        onclick="window.setSort('name-za');toggleSortDropdown();">🔤 Name Z-A</div>
+                                    <div class="sort-option" data-sort="price-low"
+                                        onclick="window.setSort('price-low');toggleSortDropdown();">💰 Price: Low-High
+                                    </div>
+                                    <div class="sort-option" data-sort="price-high"
+                                        onclick="window.setSort('price-high');toggleSortDropdown();">💰 Price: High-Low
+                                    </div>
+                                    <div class="sort-option" data-sort="stock-high"
+                                        onclick="window.setSort('stock-high');toggleSortDropdown();">📦 Stock: Highest
+                                    </div>
+                                    <div class="sort-option" data-sort="stock-low"
+                                        onclick="window.setSort('stock-low');toggleSortDropdown();">📦 Stock: Lowest
+                                    </div>
+                                    <div class="sort-option" data-sort="brand-az"
+                                        onclick="window.setSort('brand-az');toggleSortDropdown();">🏷️ Brand A-Z</div>
                                 </div>
                             </div>
                         </div>
@@ -512,9 +147,11 @@
                     </div>
 
                     <div class="products-grid" id="productsGrid"></div>
-                    
-                    <div id="aiResultPanel" style="display:none;margin-top:20px;padding:20px;background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.05);text-align:left;">
-                        <div id="compatibilityStatus" class="ai-status" style="padding:15px;border-radius:8px;background:#f8f9fc;"></div>
+
+                    <div id="aiResultPanel"
+                        style="display:none;margin-top:20px;padding:20px;background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.05);text-align:left;">
+                        <div id="compatibilityStatus" class="ai-status"
+                            style="padding:15px;border-radius:8px;background:#f8f9fc;"></div>
                         <div id="aiDetails" style="margin-top:15px;"></div>
                     </div>
                 </section>
@@ -522,10 +159,65 @@
         </div>
     </main>
 
+    <!-- 3D Viewer Modal -->
+    <div class="modal" id="pc3dModal">
+        <div class="modal-content"
+            style="max-width:95vw;max-height:95vh;width:95%;height:90vh;padding:0;overflow:hidden;position:relative;background:#1a1a2e;border-radius:16px;border:1px solid rgba(0,212,255,0.1);">
+            <button id="pc3dModalClose"
+                style="position:absolute;top:20px;right:20px;z-index:100;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:50%;width:44px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s;color:white;font-size:20px;backdrop-filter:blur(10px);">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="pc3dModalViewer" style="width:100%;height:100%;background:#1a1a2e;"></div>
+            <div
+                style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.4);font-size:13px;pointer-events:none;background:rgba(0,0,0,0.5);padding:8px 20px;border-radius:20px;backdrop-filter:blur(10px);display:flex;align-items:center;gap:16px;border:1px solid rgba(255,255,255,0.05);">
+                <span><i class="fas fa-mouse"></i> Drag to rotate</span>
+                <span><i class="fas fa-search-plus"></i> Scroll to zoom</span>
+                <span id="modalRotateStatus" style="color:#00d4ff;"><i class="fas fa-sync-alt fa-spin"></i>
+                    Auto-rotate</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Chatbot -->
+    <div class="chatbot-float">
+        <div class="chatbot-window" id="chatbotWindow">
+            <div class="chatbot-header">
+                <div class="title">
+                    <i class="fas fa-robot"></i>
+                    AI Assistant
+                </div>
+                <div class="status">
+                    <span class="dot" id="statusDot"></span>
+                    <span id="statusText">Ready</span>
+                </div>
+                <button class="close-btn" id="chatbotMinimizeBtn" title="Minimize">
+                    <i class="fas fa-minus"></i>
+                </button>
+            </div>
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="message bot">
+                    👋 Hi! I'm your PC building assistant. Ask me about components, compatibility, or building tips!
+                    <span class="timestamp">Just now</span>
+                </div>
+            </div>
+            <div class="chatbot-input">
+                <input type="text" id="chatbotInput" placeholder="Ask about PC building...">
+                <button id="chatbotSendBtn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+        <button class="chatbot-toggle" id="chatbotToggle">
+            <i class="fas fa-robot"></i>
+            <span class="badge">1</span>
+        </button>
+    </div>
+
+    <!-- Compatibility Modal -->
     <div class="modal" id="compatibilityModal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
-            <div class="modal-header"><i class="fas fa-robot"></i><h3>AI Compatibility Check</h3></div>
+            <div class="modal-header"><i class="fas fa-robot"></i>
+                <h3>AI Compatibility Check</h3>
+            </div>
             <div class="modal-body" id="modalMessage"></div>
         </div>
     </div>
@@ -533,19 +225,207 @@
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
-                <div class="footer-section"><h4>BuildBuddy</h4><p>Your trusted PC building companion since 2024.</p></div>
-                <div class="footer-section"><h4>Quick Links</h4><a href="index.html">Home</a><a href="builder.html">PC Builder</a><a href="prebuilt.html">Pre-Built PCs</a><a href="service.html">Services</a></div>
-                <div class="footer-section"><h4>Contact</h4><p><i class="fas fa-phone"></i> +60 12-345 6789</p><p><i class="fas fa-envelope"></i> support@buildbuddy.my</p></div>
+                <div class="footer-section">
+                    <h4>BuildBuddy</h4>
+                    <p>Your trusted PC building companion since 2024.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="index.html">Home</a>
+                    <a href="builder.html">PC Builder</a>
+                    <a href="prebuilt.html">Pre-Built PCs</a>
+                    <a href="service.html">Services</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-phone"></i> +60 12-345 6789</p>
+                    <p><i class="fas fa-envelope"></i> support@buildbuddy.my</p>
+                </div>
             </div>
-            <div class="footer-bottom"><p>&copy; 2024 BuildBuddy. All rights reserved.</p></div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 BuildBuddy. All rights reserved.</p>
+            </div>
         </div>
     </footer>
 
     <script>
-        function toggleCategories() {
-            document.getElementById('categoryMenu').classList.toggle('show');
-            document.querySelector('.category-toggle').classList.toggle('open');
+        // ============================================
+        // CHATBOT CONTROLS
+        // ============================================
+
+        const chatbotToggle = document.getElementById('chatbotToggle');
+        const chatbotWindow = document.getElementById('chatbotWindow');
+        const chatbotMinimizeBtn = document.getElementById('chatbotMinimizeBtn');
+        const chatbotInput = document.getElementById('chatbotInput');
+        const chatbotSendBtn = document.getElementById('chatbotSendBtn');
+        const chatbotMessages = document.getElementById('chatbotMessages');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        let isChatOpen = false;
+        let chatHistory = [];
+
+        function setStatus(status, isOnline = true) {
+            if (statusDot) {
+                statusDot.className = 'dot' + (isOnline ? '' : ' offline');
+            }
+            if (statusText) {
+                statusText.textContent = status;
+            }
         }
+
+        chatbotToggle.addEventListener('click', function () {
+            isChatOpen = !isChatOpen;
+            if (isChatOpen) {
+                chatbotWindow.classList.remove('closed');
+                chatbotWindow.classList.add('open');
+                chatbotToggle.innerHTML = '<i class="fas fa-times"></i>';
+                setTimeout(() => {
+                    chatbotInput.focus();
+                }, 300);
+            } else {
+                chatbotWindow.classList.remove('open');
+                chatbotWindow.classList.add('closed');
+                chatbotToggle.innerHTML = '<i class="fas fa-robot"></i><span class="badge">' + chatHistory.length + '</span>';
+            }
+        });
+
+        chatbotMinimizeBtn.addEventListener('click', function () {
+            isChatOpen = false;
+            chatbotWindow.classList.remove('open');
+            chatbotWindow.classList.add('closed');
+            chatbotToggle.innerHTML = '<i class="fas fa-robot"></i><span class="badge">' + chatHistory.length + '</span>';
+        });
+
+        function addChatMessage(type, content) {
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            div.innerHTML = `${content}<span class="timestamp">${time}</span>`;
+            chatbotMessages.appendChild(div);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+
+            chatHistory.push({ role: type, content: content });
+
+            const badge = chatbotToggle.querySelector('.badge');
+            if (badge) {
+                badge.textContent = chatHistory.length;
+            }
+
+            if (!isChatOpen && type === 'bot') {
+                chatbotToggle.style.animation = 'pulse 2s infinite';
+            }
+        }
+
+        function showTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'typing-indicator';
+            div.innerHTML = '<span></span><span></span><span></span>';
+            chatbotMessages.appendChild(div);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            if (!id) return;
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        async function sendChatMessage() {
+            const message = chatbotInput.value.trim();
+            if (!message) return;
+
+            addChatMessage('user', message);
+            chatbotInput.value = '';
+            chatbotSendBtn.disabled = true;
+
+            const typingId = showTypingIndicator();
+
+            try {
+                const buildContext = window.getBuildContext ? window.getBuildContext() : 'No parts selected yet.';
+
+                let response = null;
+                if (window.openaiService) {
+                    try {
+                        response = await window.openaiService.sendMessage(message, buildContext, chatHistory);
+                    } catch (e) { }
+                }
+
+                if (!response) {
+                    response = getFallbackResponse(message);
+                }
+
+                removeTypingIndicator(typingId);
+                addChatMessage('bot', response);
+                setStatus('AI Online', true);
+
+            } catch (error) {
+                console.error('Chat error:', error);
+                removeTypingIndicator(typingId);
+                const fallback = getFallbackResponse(message);
+                addChatMessage('bot', fallback);
+                setStatus('Using Local AI', false);
+            }
+
+            chatbotSendBtn.disabled = false;
+        }
+
+        function getFallbackResponse(message) {
+            const msg = message.toLowerCase();
+
+            if (msg.includes('cpu') || msg.includes('processor')) {
+                return '💻 **CPU Recommendations:**\n• Intel Core i5-13600K - Best value for gaming\n• AMD Ryzen 7 7800X3D - Best gaming performance\n• Intel Core i7-13700K - Great for gaming + streaming\n\nWhat\'s your budget and use case?';
+            }
+
+            if (msg.includes('gpu') || msg.includes('graphics')) {
+                return '🎮 **GPU Recommendations:**\n• RTX 4060 - Great 1080p gaming\n• RTX 4070 - Excellent 1440p gaming\n• RTX 4080 - 4K gaming performance\n\nWhat resolution do you play at?';
+            }
+
+            if (msg.includes('ram') || msg.includes('memory')) {
+                return '🧠 **RAM Recommendations:**\n• 16GB DDR5 - Minimum for gaming\n• 32GB DDR5 - Recommended for gaming + streaming\n• 64GB DDR5 - Content creation\n\nMake sure to match your motherboard\'s DDR type!';
+            }
+
+            if (msg.includes('motherboard')) {
+                return '🔌 **Motherboard Tips:**\n• Match CPU socket (LGA1700 for Intel, AM5 for AMD)\n• Check RAM support (DDR4 vs DDR5)\n• Consider form factor (ATX, Micro-ATX, ITX)';
+            }
+
+            if (msg.includes('psu') || msg.includes('power supply')) {
+                return '⚡ **PSU Recommendations:**\n• 500W-650W - Entry/mid-range builds\n• 750W-850W - High-end builds\n• 1000W+ - Flagship builds\n\nLook for 80+ Gold rating!';
+            }
+
+            if (msg.includes('compatible') || msg.includes('check my build')) {
+                return '🔍 **Compatibility Checklist:**\n• CPU socket matches motherboard\n• RAM type matches motherboard (DDR4 or DDR5)\n• PSU has enough wattage\n• Case supports motherboard form factor\n\nClick the "AI Check" button for a detailed report!';
+            }
+
+            if (msg.includes('hi') || msg.includes('hello') || msg.includes('hey')) {
+                return '👋 Hello! I\'m your PC building assistant. I can recommend parts, check compatibility, or answer any questions about building a PC!';
+            }
+
+            return '💡 I can help you with:\n• Component recommendations (CPU, GPU, RAM, etc.)\n• Compatibility checks\n• Build suggestions\n• Budget optimization\n\nJust ask me anything about PC building!';
+        }
+
+        chatbotInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        chatbotSendBtn.addEventListener('click', sendChatMessage);
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+
+        function toggleCategories() {
+            const menu = document.getElementById('categoryMenu');
+            const toggle = document.querySelector('.category-toggle');
+            menu.classList.toggle('show');
+            toggle.classList.toggle('open');
+        }
+
         function selectCategory(category, el) {
             document.querySelectorAll('.category-item').forEach(e => e.classList.remove('active'));
             el.classList.add('active');
@@ -553,11 +433,13 @@
             document.querySelector('.category-toggle').classList.remove('open');
             window.selectBuilderCategory(category);
         }
+
         function toggleSortDropdown() {
             const d = document.getElementById('sortDropdown');
             d.style.display = d.style.display === 'none' ? 'block' : 'none';
         }
-        document.addEventListener('click', function(e) {
+
+        document.addEventListener('click', function (e) {
             const dd = document.querySelector('.category-dropdown');
             const sd = document.getElementById('sortDropdown');
             if (dd && !dd.contains(e.target)) {
@@ -568,7 +450,24 @@
                 sd.style.display = 'none';
             }
         });
-        (function() {
+
+        window.getBuildContext = function () {
+            if (typeof window.selectedParts !== 'undefined' && window.inventoryData) {
+                const parts = [];
+                for (const category in window.selectedParts) {
+                    if (window.selectedParts[category]) {
+                        const part = window.inventoryData.find(p => p.i_id === window.selectedParts[category]);
+                        if (part) {
+                            parts.push(`${category.toUpperCase()}: ${part.i_name} (${part.i_brand || 'N/A'})`);
+                        }
+                    }
+                }
+                return parts.length > 0 ? `Current Build:\n${parts.join('\n')}` : 'No parts selected yet.';
+            }
+            return 'No parts selected yet.';
+        };
+
+        (function () {
             const user = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
             if (user) {
                 try {
@@ -576,16 +475,41 @@
                     if (userData.role === 'STAFF' || userData.role === 'ADMIN') {
                         document.getElementById('staffNavLink').style.display = 'inline-block';
                     }
-                } catch (e) {}
+                    const loginBtnText = document.getElementById('loginBtnText');
+                    const loginBtn = document.getElementById('loginBtn');
+                    if (loginBtnText) {
+                        loginBtnText.textContent = (userData.full_name || userData.name || 'User').split(' ')[0];
+                    }
+                    if (loginBtn) {
+                        loginBtn.onclick = () => {
+                            if (userData.role === 'ADMIN') {
+                                window.location.href = 'admin/admin-dashboard.html';
+                            } else if (userData.role === 'STAFF') {
+                                window.location.href = 'staff/staff-dashboard.html';
+                            } else {
+                                window.location.href = 'profile.html';
+                            }
+                        };
+                    }
+                } catch (e) { }
             }
+            const count = JSON.parse(localStorage.getItem('buildbuddy_cart') || '[]').length;
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = count);
         })();
     </script>
 
     <script type="module">
-    import { initCart } from './js/cart-utils.js';
-    document.addEventListener('DOMContentLoaded', async () => { await initCart(); });
+        import { initCart } from './js/cart-utils.js';
+        import openaiService from './js/services/openai.js';
+
+        window.openaiService = openaiService;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initCart();
+        });
     </script>
 
     <script type="module" src="js/script.js"></script>
 </body>
+
 </html>
