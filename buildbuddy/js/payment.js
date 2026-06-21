@@ -916,7 +916,7 @@ window.placeOrder = async function () {
         await saveReceiptToDatabase(finalPaymentId, orderData, receiptUserData);
 
         // ============================================
-        // CREATE/UPDATE SERVICE ORDERS (FIXED)
+        // CREATE/UPDATE SERVICE ORDERS
         // ============================================
         if (cartServices.length > 0) {
             const userId = user ? (user.user_id || user.id) : null;
@@ -948,7 +948,6 @@ window.placeOrder = async function () {
                 if (pendingOrder && pendingOrder.service_id === service.serviceId) {
                     console.log('✅ Using pending order:', pendingOrder);
 
-                    // Check if the order exists
                     const { data: existingOrder, error: checkError } = await supabase
                         .from('service_orders')
                         .select('*')
@@ -960,7 +959,6 @@ window.placeOrder = async function () {
                     } else if (existingOrder) {
                         console.log('✅ Found existing order:', existingOrder);
 
-                        // ✅ UPDATE the existing order with payment details
                         const { error: updateError } = await supabase
                             .from('service_orders')
                             .update({
@@ -977,7 +975,6 @@ window.placeOrder = async function () {
                             console.log('✅ Updated order:', pendingOrder.order_id);
                             serviceOrderData = existingOrder;
 
-                            // Clear the pending order
                             localStorage.removeItem('buildbuddy_pending_service_order');
                             sessionStorage.removeItem('buildbuddy_pending_service_order');
                             console.log('🧹 Cleared pending order');
@@ -1022,40 +1019,6 @@ window.placeOrder = async function () {
                     }
                 }
 
-                // ✅ If still no order, check if order_id 19 exists and use it
-                if (!serviceOrderData) {
-                    console.log('🔍 Checking if order 19 exists...');
-
-                    const { data: order19, error: check19 } = await supabase
-                        .from('service_orders')
-                        .select('*')
-                        .eq('order_id', 19)
-                        .single();
-
-                    if (!check19 && order19) {
-                        console.log('✅ Found order 19, updating it:', order19);
-
-                        const { error: update19 } = await supabase
-                            .from('service_orders')
-                            .update({
-                                user_id: userId || null,
-                                session_id: sessionId,
-                                service_id: service.serviceId,
-                                device_model: 'From Payment',
-                                address: address,
-                                contact_phone: phone,
-                                order_status: 'PENDING',
-                                updated_at: new Date().toISOString()
-                            })
-                            .eq('order_id', 19);
-
-                        if (!update19) {
-                            serviceOrderData = order19;
-                            console.log('✅ Updated order 19');
-                        }
-                    }
-                }
-
                 // ✅ If still no order, create a new one
                 if (!serviceOrderData) {
                     console.log('⚠️ Creating new order');
@@ -1086,7 +1049,6 @@ window.placeOrder = async function () {
                     console.log('✅ Created new order:', newOrder.order_id);
                 }
 
-                // Store the order reference
                 if (serviceOrderData) {
                     const serviceOrderRef = {
                         order_id: serviceOrderData.order_id,
@@ -1101,6 +1063,71 @@ window.placeOrder = async function () {
             }
         }
 
+        // ============================================
+        // CLEAN UP OLD CART AND CREATE NEW ONE
+        // ============================================
+        try {
+            // ✅ STEP 1: Clear the old cart items
+            if (cartId) {
+                const { error: itemsError } = await supabase
+                    .from('cart_items')
+                    .delete()
+                    .eq('cart_id', cartId);
+
+                if (itemsError) {
+                    console.warn('⚠️ Error clearing cart items:', itemsError);
+                }
+
+                const { error: servicesError } = await supabase
+                    .from('cart_service')
+                    .delete()
+                    .eq('cart_id', cartId);
+
+                if (servicesError) {
+                    console.warn('⚠️ Error clearing cart services:', servicesError);
+                }
+
+                console.log('✅ Old cart items cleared for cart:', cartId);
+            }
+
+            // ✅ STEP 2: Create a new cart for future orders
+            const newCart = await dataService.createNewCart();
+            console.log('✅ New cart created for future orders:', newCart);
+
+            // ✅ STEP 3: Clear local storage cart
+            localStorage.removeItem('buildbuddy_cart');
+
+            // ✅ STEP 4: Reset local cart state
+            cartItems = [];
+            cartServices = [];
+            cartTotal = 0;
+            voucherDiscount = 0;
+            selectedPayment = null;
+
+            // ✅ STEP 5: Update cart count in UI
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = '0');
+
+            // ✅ STEP 6: Update the dataService's currentCartId
+            if (newCart && newCart.cart_id) {
+                dataService.currentCartId = newCart.cart_id;
+                console.log('✅ Updated dataService.currentCartId to:', newCart.cart_id);
+            }
+
+            // ✅ STEP 7: Dispatch a custom event
+            window.dispatchEvent(new CustomEvent('cartUpdated', {
+                detail: { cartId: newCart?.cart_id, itemCount: 0 }
+            }));
+
+        } catch (cartError) {
+            console.error('❌ Error managing cart:', cartError);
+            localStorage.removeItem('buildbuddy_cart');
+            cartItems = [];
+            cartServices = [];
+            cartTotal = 0;
+            document.querySelectorAll('.cart-count').forEach(el => el.textContent = '0');
+        }
+
+        // Show success AFTER cart is cleared and new cart is created
         showSuccess(total, finalPaymentId, receiptUserData, orderData);
 
     } catch (error) {

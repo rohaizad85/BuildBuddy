@@ -1,5 +1,14 @@
+// D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\prebuilt.js
+
 import supabase from './supabase-client.js';
 import Pc3DViewer from './services/buildcores.js';
+import { 
+    getUser, 
+    getCartCount, 
+    updateCartCountDisplay, 
+    initCart,
+    setupLoginButton 
+} from './cart-utils.js';
 
 let bundles = [];
 let allInventory = [];
@@ -8,6 +17,15 @@ let currentBundle = null;
 let pcViewer = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // ✅ Setup login button first
+    setupLoginButton();
+    
+    // ✅ Initialize cart
+    await initCart();
+    
+    // ✅ Update cart count
+    await updateCartCountDisplay();
+    
     await loadInventory();
     await loadBundles();
     setupFilterListeners();

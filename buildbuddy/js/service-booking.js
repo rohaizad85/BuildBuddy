@@ -860,30 +860,37 @@ async function handleBooking(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
     try {
-        // Get form values
         const customerName = document.getElementById('customerName').value.trim();
         let contactPhone = document.getElementById('contactPhone').value.trim();
-        contactPhone = contactPhone.replace(/[\s\-\(\)\.]/g, '');
-        if (contactPhone.length > 20) {
-            console.warn('⚠️ Phone number too long (' + contactPhone.length + ' chars), truncating to 20');
-            contactPhone = contactPhone.substring(0, 20);
-        }
         const deviceModel = document.getElementById('deviceModel').value.trim();
         const deviceIssue = document.getElementById('deviceIssue').value.trim();
-        const address = document.getElementById('address').value.trim();
         const preferredDate = document.getElementById('preferredDate').value;
         const preferredTime = document.getElementById('preferredTime').value;
         const notes = document.getElementById('notes').value.trim();
 
-        // Validate required fields
-        if (!customerName || !contactPhone || !deviceModel || !address) {
-            throw new Error('Please fill in all required fields.');
+        contactPhone = contactPhone.replace(/^\+/, '');
+        contactPhone = contactPhone.replace(/[\s\-\(\)\.]/g, '');
+        contactPhone = contactPhone.replace(/\D/g, ''); // Keep only digits
+
+        if (contactPhone.length > 20) {
+            console.warn('⚠️ Phone number too long (' + contactPhone.length + ' chars), truncating to 20');
+            contactPhone = contactPhone.substring(0, 20);
+        }
+        console.log('📱 Cleaned phone:', contactPhone);
+
+        // ✅ Simple validation - REMOVED address validation
+        const errors = [];
+        if (!customerName) errors.push('Name is required');
+        if (!contactPhone) errors.push('Phone number is required');
+        if (contactPhone && contactPhone.length < 7) errors.push('Phone number must be at least 7 digits');
+        if (!deviceModel) errors.push('Device model is required');
+
+        if (errors.length > 0) {
+            throw new Error('Please fix the following:\n• ' + errors.join('\n• '));
         }
 
         // Get user info
         let userId = null;
-        let sessionId = null;
-
         try {
             const userData = localStorage.getItem('buildbuddy_user') || sessionStorage.getItem('buildbuddy_user');
             if (userData) {
@@ -895,15 +902,13 @@ async function handleBooking(e) {
             console.warn('Could not get user data:', e);
         }
 
-        // Get or create session
-        if (!userId) {
-            sessionId = localStorage.getItem('buildbuddy_session_id');
-            if (!sessionId) {
-                sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('buildbuddy_session_id', sessionId);
-            }
-            console.log('🔑 Session ID:', sessionId);
+        // ✅ ALWAYS create a session ID
+        let sessionId = localStorage.getItem('buildbuddy_session_id');
+        if (!sessionId) {
+            sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('buildbuddy_session_id', sessionId);
         }
+        console.log('🔑 Session ID:', sessionId);
 
         // Add notes with image info
         let finalNotes = notes || '';
@@ -915,20 +920,14 @@ async function handleBooking(e) {
             });
         }
 
-        if (!sessionId) {
-            sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('buildbuddy_session_id', sessionId);
-        }
-        console.log('🔑 Session ID:', sessionId);
-
-        // Build order data
+        // Build order data - REMOVED address
         const orderData = {
             user_id: userId,
             session_id: sessionId,
             service_id: parseInt(serviceId),
             device_model: deviceModel,
             device_issue: deviceIssue || null,
-            address: address,
+            // address: address,  // ❌ REMOVED
             contact_phone: contactPhone,
             preferred_date: preferredDate || null,
             preferred_time: preferredTime || null,
@@ -948,17 +947,26 @@ async function handleBooking(e) {
 
         if (insertError) {
             console.error('❌ Insert error:', insertError);
-            throw new Error('Failed to create service booking: ' + insertError.message);
+
+            let errorMessage = 'Failed to create service booking. ';
+            if (insertError.code === '22001') {
+                errorMessage += 'One of the fields is too long. Please check your phone number (max 20 chars) and device model (max 100 chars).';
+            } else if (insertError.code === '23502') {
+                errorMessage += 'Please fill in all required fields.';
+            } else if (insertError.code === '23503') {
+                errorMessage += 'Invalid service selected. Please try again.';
+            } else {
+                errorMessage += insertError.message;
+            }
+            throw new Error(errorMessage);
         }
 
-        // ✅ Fetch the order using multiple fields to uniquely identify it
-        // Since session_id is null, use device_model, service_id, and contact_phone
+        // Fetch the order using session_id
         const { data: fetchedData, error: fetchError } = await supabase
             .from('service_orders')
             .select('*')
+            .eq('session_id', sessionId)
             .eq('service_id', parseInt(serviceId))
-            .eq('device_model', deviceModel)
-            .eq('contact_phone', contactPhone)
             .eq('order_status', 'PENDING')
             .order('order_id', { ascending: false })
             .limit(1);
@@ -972,7 +980,7 @@ async function handleBooking(e) {
 
         if (!fetchedData || fetchedData.length === 0) {
             console.error('❌ No order found after insert');
-            throw new Error('Failed to retrieve created order');
+            throw new Error('Failed to retrieve created order. Please try again.');
         }
 
         const orderResult = fetchedData[0];
@@ -1094,7 +1102,8 @@ async function handleBooking(e) {
 
     } catch (error) {
         console.error('❌ Booking error:', error);
-        showErrorMessage(error.message || 'Failed to book service. Please try again.');
+        const errorMessage = error.message || 'Failed to book service. Please try again.';
+        showErrorMessage(errorMessage);
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Booking';
     }
@@ -1127,11 +1136,13 @@ function showSuccessAndRedirect(order) {
         `;
     }
 
+    // ✅ Removed address from success message
     successDiv.innerHTML = `
         <i class="fas fa-check-circle" style="font-size: 48px; color: #4CAF50; margin-bottom: 15px;"></i>
         <h3 style="color: #2e7d32; margin-bottom: 10px;">Service Booked Successfully!</h3>
         <p style="color: #555; margin-bottom: 5px;">Your service has been added to the cart.</p>
         <p style="color: #777; font-size: 14px;">Order #${order.order_id}</p>
+        <p style="color: #888; font-size: 13px; margin: 5px 0;">📱 Phone: ${order.contact_phone}</p>
         ${imagesHtml}
         <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
             <button onclick="window.location.href='cart.html'" class="btn-primary" style="padding: 12px 30px; border: none; border-radius: 8px; background: #00d4ff; color: #1a1a2e; font-weight: 600; cursor: pointer;">

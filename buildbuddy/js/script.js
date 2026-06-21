@@ -1,6 +1,6 @@
 // D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\script.js
 import dataService from './data-service.js';
-import { 
+import {
     getUser,
     getLocalCart,
     saveLocalCart,
@@ -42,9 +42,13 @@ const isBuilderPage = window.location.pathname.includes('builder.html');
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 DOM Content Loaded');
+    
+    // ✅ Setup login button FIRST
+    setupLoginButton();
+    
     await updateCartCountDisplay();
     await loadInitialData();
-    
+
     if (isBuilderPage) {
         console.log('📄 Builder page detected');
         initializeBuilderPage();
@@ -62,22 +66,41 @@ async function loadInitialData() {
     try {
         console.log('📦 Loading initial data...');
         showLoading(true);
-        
-        const [inventory, services] = await Promise.all([
-            dataService.getInventory(),
-            dataService.getServices()
+
+        const [inventoryResult, servicesResult] = await Promise.all([
+            supabase.from('inventory').select('*').order('i_name'),
+            supabase.from('service').select('*').order('service_name')
         ]);
-        
-        inventoryData = inventory || [];
-        servicesData = services || [];
-        console.log(`✅ Data loaded: ${inventoryData.length} inventory items, ${servicesData.length} services`);
-        
+
+        if (inventoryResult.error) {
+            console.error('❌ Inventory fetch error:', inventoryResult.error);
+            inventoryData = [];
+        } else {
+            inventoryData = inventoryResult.data || [];
+            console.log(`✅ Loaded ${inventoryData.length} inventory items`);
+
+            // ✅ Make inventory globally available for the chatbot
+            window.inventoryData = inventoryData;
+
+            // ✅ Dispatch event for chatbot to know inventory is ready
+            window.dispatchEvent(new CustomEvent('inventoryReady', {
+                detail: { inventory: inventoryData }
+            }));
+        }
+
+        if (servicesResult.error) {
+            servicesData = [];
+        } else {
+            servicesData = servicesResult.data || [];
+            console.log(`✅ Loaded ${servicesData.length} services`);
+        }
+
         if (isBuilderPage) {
             initializeBuilderPage();
         } else {
             initializeHomePage();
         }
-        
+
     } catch (error) {
         console.error('❌ Error loading data:', error);
         showError('Failed to load data. Please refresh the page.');
@@ -171,11 +194,11 @@ function getSpecsForComponent(part) {
 
 function getProductImageUrl(imagePath) {
     if (!imagePath) return null;
-    
+
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
         return imagePath;
     }
-    
+
     const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
     const bucket = 'images';
     const encodedPath = encodeURIComponent(imagePath);
@@ -246,7 +269,7 @@ function getAISpecs(product) {
             ]
         }
     };
-    
+
     return specs[product.i_category] || { label: product.i_category, specs: [{ key: 'Type', value: product.i_category }] };
 }
 
@@ -257,13 +280,13 @@ function getAISpecs(product) {
 function renderProducts(category = 'all') {
     const productsGrid = document.getElementById('productsGrid');
     if (!productsGrid) return;
-    
-    let filteredProducts = category === 'all' 
-        ? inventoryData 
+
+    let filteredProducts = category === 'all'
+        ? inventoryData
         : inventoryData.filter(p => p.i_category === category);
 
     filteredProducts = sortProducts(filteredProducts);
-    
+
     productsGrid.innerHTML = filteredProducts.map(product => {
         const isSelected = selectedParts[product.i_category] === product.i_id;
         const imageUrl = getProductImageUrl(product.i_image_path);
@@ -271,7 +294,7 @@ function renderProducts(category = 'all') {
         const quantity = productQuantities[product.i_id] || 0;
         const inCart = quantity > 0;
         const aiSpecs = getAISpecs(product);
-        
+
         return `
             <div class="product-card ${isSelected ? 'selected' : ''}" data-product-id="${product.i_id}">
                 <div class="product-image" onclick="window.showProductDetail(${product.i_id})">
@@ -348,76 +371,76 @@ function getIconForCategory(category) {
 // QUANTITY CONTROL FUNCTIONS
 // ============================================
 
-window.updateProductQuantity = function(productId, change, maxStock, newValue) {
+window.updateProductQuantity = function (productId, change, maxStock, newValue) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
-    
+
     let currentQty = productQuantities[productId] || 0;
     let newQty;
-    
+
     if (newValue !== undefined) {
         newQty = parseInt(newValue) || 0;
     } else {
         newQty = currentQty + change;
     }
-    
+
     if (newQty < 0) newQty = 0;
     if (newQty > maxStock) {
         showToast(`Only ${maxStock} units available in stock.`, 'warning');
         newQty = maxStock;
     }
-    
+
     if (newQty === 0 && currentQty > 0) {
         window.removeFromCart(productId);
         return;
     }
-    
+
     if (newQty === 0) {
         delete productQuantities[productId];
     } else {
         productQuantities[productId] = newQty;
     }
-    
+
     renderProducts(getCurrentCategory());
     updateCartCountDisplay();
 };
 
-window.addToCartWithQuantity = function(productId) {
+window.addToCartWithQuantity = function (productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
-    
+
     if (product.i_quantity <= 0) {
         showToast('This product is out of stock.', 'error');
         return;
     }
-    
+
     // Start with quantity 1 in local state
     productQuantities[productId] = 1;
     renderProducts(getCurrentCategory());
-    
+
     // Add to actual cart
     window.addToCart(productId);
-    
+
     if (!selectedParts[product.i_category]) {
         window.selectForBuild(productId);
     }
-    
+
     updateCartCountDisplay();
 };
 
-window.removeFromCart = async function(productId) {
+window.removeFromCart = async function (productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
-    
+
     if (!confirm(`Remove "${product.i_name}" from your cart?`)) return;
-    
+
     try {
         // Remove from database
         const user = getUser();
         if (user) {
             await dataService.ensureInitialized();
             const cartId = dataService.currentCartId;
-            
+
             if (cartId) {
                 await supabase
                     .from('cart_items')
@@ -426,19 +449,19 @@ window.removeFromCart = async function(productId) {
                     .eq('i_id', productId);
             }
         }
-        
+
         // Remove from local state
         delete productQuantities[productId];
-        
+
         // Remove from local cart storage
         const localCart = getLocalCart();
         const filtered = localCart.filter(i => !(i.type === 'product' && i.id === productId));
         saveLocalCart(filtered);
-        
+
         renderProducts(getCurrentCategory());
         await updateCartCountDisplay();
         showToast(`Removed ${product.i_name} from cart.`, 'info');
-        
+
     } catch (error) {
         console.error('Error removing from cart:', error);
         showToast('Failed to remove item.', 'error');
@@ -449,19 +472,19 @@ window.removeFromCart = async function(productId) {
 // PRODUCT DETAIL MODAL
 // ============================================
 
-window.showProductDetail = function(productId) {
+window.showProductDetail = function (productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
-    
+
     const modal = document.getElementById('compatibilityModal');
     const modalMessage = document.getElementById('modalMessage');
     if (!modal || !modalMessage) return;
-    
+
     const isSelected = selectedParts[product.i_category] === product.i_id;
     const imageUrl = getProductImageUrl(product.i_image_path);
     const shouldLoadImage = imageUrl && !imageUrl.includes('via.placeholder.com');
     const aiSpecs = getAISpecs(product);
-    
+
     modalMessage.innerHTML = `
         <div style="text-align: center;">
             <div style="width: 150px; height: 150px; margin: 0 auto 15px; background: #f8f9fc; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative;">
@@ -498,7 +521,7 @@ window.showProductDetail = function(productId) {
             </div>
         </div>
     `;
-    
+
     modal.querySelector('.modal-header h3').textContent = 'Product Details';
     modal.style.display = 'flex';
 };
@@ -509,20 +532,20 @@ window.showProductDetail = function(productId) {
 
 function initialize3DViewer() {
     console.log('🎮 Initializing 3D Viewer...');
-    
+
     const viewerContainer = document.getElementById('sidebarPc3dViewer');
-    
+
     if (!viewerContainer) {
         console.warn('⚠️ 3D viewer container not found: #sidebarPc3dViewer');
         return;
     }
-    
+
     console.log('📦 3D viewer container found:', viewerContainer.id);
 
     try {
         pcViewer = new Pc3DViewer();
         console.log('✅ Pc3DViewer instance created');
-        
+
         pcViewer.init('sidebarPc3dViewer').then(() => {
             console.log('✅ 3D Viewer initialized successfully');
             viewerInitialized = true;
@@ -542,7 +565,7 @@ function initialize3DViewer() {
 
 function update3DViewer() {
     console.log('🔄 update3DViewer called');
-    
+
     if (!pcViewer || !viewerReady) {
         console.warn('⚠️ 3D viewer not ready, skipping update');
         return;
@@ -594,7 +617,7 @@ function update3DViewer() {
 
 function initializeModalViewer() {
     console.log('🎬 Initializing Modal 3D Viewer...');
-    
+
     const container = document.getElementById('pc3dModalViewer');
     if (!container) {
         console.warn('⚠️ Modal viewer container not found');
@@ -605,7 +628,7 @@ function initializeModalViewer() {
         modalViewer = new Pc3DViewer();
         modalViewer.containerId = 'pc3dModalViewer';
         modalViewer.container = container;
-        
+
         modalViewer.init('pc3dModalViewer').then(() => {
             console.log('✅ Modal 3D Viewer initialized');
             modalViewerInitialized = true;
@@ -650,7 +673,7 @@ function syncModalViewer() {
 
 function expand3DViewer() {
     console.log('🔍 Expanding 3D viewer...');
-    
+
     const modal = document.getElementById('pc3dModal');
     if (!modal) return;
 
@@ -662,12 +685,12 @@ function expand3DViewer() {
 
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    
+
     const status = document.getElementById('modalRotateStatus');
     if (status && modalViewer) {
         const isRotating = modalViewer.autoRotate !== false;
-        status.innerHTML = isRotating ? 
-            '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' : 
+        status.innerHTML = isRotating ?
+            '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' :
             '<i class="fas fa-pause"></i> Paused';
     }
 }
@@ -693,14 +716,14 @@ function setup3DViewerEvents() {
 
     const modal = document.getElementById('pc3dModal');
     if (modal) {
-        modal.addEventListener('click', function(e) {
+        modal.addEventListener('click', function (e) {
             if (e.target === modal) {
                 close3DModal();
             }
         });
     }
 
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             const modalEl = document.getElementById('pc3dModal');
             if (modalEl && modalEl.style.display === 'flex') {
@@ -716,8 +739,8 @@ function setup3DViewerEvents() {
                 }
                 const status = document.getElementById('modalRotateStatus');
                 if (status) {
-                    status.innerHTML = modalViewer.autoRotate ? 
-                        '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' : 
+                    status.innerHTML = modalViewer.autoRotate ?
+                        '<i class="fas fa-sync-alt fa-spin"></i> Auto-rotate' :
                         '<i class="fas fa-pause"></i> Paused';
                 }
             }
@@ -729,10 +752,10 @@ function setup3DViewerEvents() {
 // SELECT FOR BUILD
 // ============================================
 
-window.selectForBuild = async function(productId) {
+window.selectForBuild = async function (productId) {
     const product = inventoryData.find(p => p.i_id === productId);
     if (!product) return;
-    
+
     if (selectedParts[product.i_category] === productId) {
         selectedParts[product.i_category] = null;
         buildCompleted = false;
@@ -743,18 +766,18 @@ window.selectForBuild = async function(productId) {
         setTimeout(() => update3DViewer(), 100);
         return;
     }
-    
+
     if (compatibilityMode && !await checkCompatibility(product)) {
         return;
     }
-    
+
     selectedParts[product.i_category] = productId;
     buildCompleted = false;
     resetCompleteButton();
     updateSelectedPartsDisplay();
     updateBuildSummary();
     renderProducts(getCurrentCategory());
-    
+
     setTimeout(() => {
         update3DViewer();
     }, 200);
@@ -775,7 +798,7 @@ function resetCompleteButton() {
 function updateSelectedPartsDisplay() {
     const display = document.getElementById('selectedPartsDisplay');
     if (!display) return;
-    
+
     const parts = [];
     for (const category in selectedParts) {
         if (selectedParts[category]) {
@@ -790,11 +813,11 @@ function updateBuildSummary() {
     const summaryList = document.getElementById('buildSummaryList');
     const buildTotal = document.getElementById('buildTotal');
     if (!summaryList || !buildTotal) return;
-    
+
     let total = 0;
     let html = '';
     let partCount = 0;
-    
+
     for (const category in selectedParts) {
         if (selectedParts[category]) {
             const part = inventoryData.find(p => p.i_id === selectedParts[category]);
@@ -816,7 +839,7 @@ function updateBuildSummary() {
             }
         }
     }
-    
+
     if (!html) {
         html = '<p class="empty-build">No components selected</p>';
     } else {
@@ -826,7 +849,7 @@ function updateBuildSummary() {
     buildTotal.textContent = `RM ${total.toFixed(2)}`;
 }
 
-window.removeFromBuild = function(category) {
+window.removeFromBuild = function (category) {
     selectedParts[category] = null;
     buildCompleted = false;
     resetCompleteButton();
@@ -843,7 +866,7 @@ window.removeFromBuild = function(category) {
 async function checkCompatibility(newPart) {
     let isCompatible = true;
     let message = '';
-    
+
     if (newPart.i_category === 'cpu' && selectedParts.motherboard) {
         const mb = inventoryData.find(p => p.i_id === selectedParts.motherboard);
         if (mb && !isCompatibleCPU(newPart, mb)) {
@@ -851,7 +874,7 @@ async function checkCompatibility(newPart) {
             message = 'CPU may not be compatible with selected motherboard.';
         }
     }
-    
+
     if (newPart.i_category === 'motherboard' && selectedParts.cpu) {
         const cpu = inventoryData.find(p => p.i_id === selectedParts.cpu);
         if (cpu && !isCompatibleCPU(cpu, newPart)) {
@@ -859,12 +882,12 @@ async function checkCompatibility(newPart) {
             message = 'Motherboard may not be compatible with selected CPU.';
         }
     }
-    
+
     if (!isCompatible) {
         showModal('Compatibility Warning', message, 'Check socket compatibility before purchasing.');
         return false;
     }
-    
+
     return true;
 }
 
@@ -881,9 +904,9 @@ function showModal(title, message, suggestion = '') {
     const modal = document.getElementById('compatibilityModal') || document.getElementById('serviceModal');
     const modalMessage = document.getElementById('modalMessage');
     if (!modal || !modalMessage) return;
-    
+
     const isWarning = title.includes('Warning');
-    
+
     modal.querySelector('.modal-header h3').textContent = title;
     modalMessage.innerHTML = `
         <div style="text-align: center;">
@@ -906,7 +929,7 @@ function showModal(title, message, suggestion = '') {
 function renderServices() {
     const servicesGrid = document.getElementById('servicesGrid');
     if (!servicesGrid) return;
-    
+
     servicesGrid.innerHTML = servicesData.map(service => `
         <div class="service-card">
             <i class="fas ${getServiceIcon(service.service_category)}"></i>
@@ -926,33 +949,33 @@ function getServiceIcon(category) {
     return icons[category] || 'fa-wrench';
 }
 
-window.bookService = async function(serviceId) {
+window.bookService = async function (serviceId) {
     try {
         console.log('📚 Booking service:', serviceId);
-        
+
         const service = servicesData.find(s => s.service_id === serviceId);
         if (!service) {
             showToast('Service not found.', 'error');
             return;
         }
-        
+
         console.log('📦 Service found:', service);
-        
+
         // Ensure we have a cart
         await dataService.ensureInitialized();
         let cartId = dataService.currentCartId;
-        
+
         if (!cartId) {
             cartId = await dataService.createNewCart();
         }
-        
+
         if (!cartId) {
             showToast('Failed to create cart.', 'error');
             return;
         }
-        
+
         console.log('🛒 Cart ID:', cartId);
-        
+
         // Check if service already exists in cart
         const { data: existing, error: checkError } = await supabase
             .from('cart_service')
@@ -960,16 +983,16 @@ window.bookService = async function(serviceId) {
             .eq('cart_id', cartId)
             .eq('service_id', serviceId)
             .maybeSingle();
-        
+
         if (checkError) {
             console.error('Error checking existing service:', checkError);
         }
-        
+
         if (existing) {
             showToast(`${service.service_name} is already in your cart.`, 'warning');
             return;
         }
-        
+
         // ============================================
         // FIX: Insert with correct service_id
         // ============================================
@@ -980,15 +1003,15 @@ window.bookService = async function(serviceId) {
                 service_id: serviceId  // Make sure this is the actual service_id, not null
             })
             .select();
-        
+
         if (insertError) {
             console.error('Error inserting service:', insertError);
             showToast('Failed to book service: ' + insertError.message, 'error');
             return;
         }
-        
+
         console.log('✅ Service inserted:', insertData);
-        
+
         // Also add to local cart for display
         const localCart = getLocalCart();
         const existingLocal = localCart.find(item => item.type === 'service' && item.id === serviceId);
@@ -1002,41 +1025,41 @@ window.bookService = async function(serviceId) {
             });
             saveLocalCart(localCart);
         }
-        
+
         await updateCartCountDisplay();
         showModal('Service Booked!', `${service.service_name} has been added to your cart.`);
-        
+
     } catch (error) {
         console.error('Error booking service:', error);
         showToast('Failed to book service: ' + error.message, 'error');
     }
 };
 
-window.addToCart = async function(productId) {
+window.addToCart = async function (productId) {
     try {
         const product = inventoryData.find(p => p.i_id === productId);
         if (!product) {
             showToast('Product not found.', 'error');
             return;
         }
-        
+
         // Ensure we have a cart
         await dataService.ensureInitialized();
         let cartId = dataService.currentCartId;
-        
+
         if (!cartId) {
             cartId = await dataService.createNewCart();
         }
-        
+
         if (!cartId) {
             showToast('Failed to create cart.', 'error');
             return;
         }
-        
+
         const quantity = 1;
         const price = parseFloat(product.i_price);
         const totalPrice = price * quantity;
-        
+
         // Check if item already exists in cart
         const { data: existing } = await supabase
             .from('cart_items')
@@ -1044,7 +1067,7 @@ window.addToCart = async function(productId) {
             .eq('cart_id', cartId)
             .eq('i_id', productId)
             .maybeSingle();
-        
+
         if (existing) {
             // Update existing
             await supabase
@@ -1067,7 +1090,7 @@ window.addToCart = async function(productId) {
                 });
             showToast(`${product.i_name} added to cart!`, 'success');
         }
-        
+
         // Also add to local cart for display
         const localCart = getLocalCart();
         const existingLocal = localCart.find(item => item.type === 'product' && item.id === productId);
@@ -1083,9 +1106,9 @@ window.addToCart = async function(productId) {
             });
         }
         saveLocalCart(localCart);
-        
+
         await updateCartCountDisplay();
-        
+
     } catch (error) {
         console.error('Error adding to cart:', error);
         showToast('Failed to add item to cart: ' + error.message, 'error');
@@ -1099,14 +1122,14 @@ window.addToCart = async function(productId) {
 function showToast(message, type = 'info') {
     const existing = document.querySelector('.custom-toast');
     if (existing) existing.remove();
-    
+
     const colors = {
         success: '#4CAF50',
         error: '#f44336',
         warning: '#ff9800',
         info: '#00d4ff'
     };
-    
+
     const toast = document.createElement('div');
     toast.className = 'custom-toast';
     toast.style.cssText = `
@@ -1124,10 +1147,10 @@ function showToast(message, type = 'info') {
         font-size: 14px;
         font-weight: 500;
     `;
-    
+
     toast.textContent = message;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(20px)';
@@ -1155,7 +1178,7 @@ function sortProducts(products) {
     }
 }
 
-window.setSort = function(sortType) {
+window.setSort = function (sortType) {
     currentSort = sortType;
     document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
     document.querySelector(`.sort-option[data-sort="${sortType}"]`)?.classList.add('active');
@@ -1167,7 +1190,7 @@ function getCurrentCategory() {
     return activeCategory ? activeCategory.dataset.category : 'all';
 }
 
-window.selectBuilderCategory = function(category) {
+window.selectBuilderCategory = function (category) {
     renderProducts(category);
 };
 
@@ -1183,43 +1206,43 @@ function setupBuilderListeners() {
             renderProducts(item.dataset.category);
         });
     });
-    
+
     const completeBtn = document.getElementById('completeBuildBtn');
     if (completeBtn) {
         completeBtn.addEventListener('click', async () => {
             const partCount = Object.values(selectedParts).filter(v => v).length;
-            
+
             if (partCount < 3) {
                 showModal('Build Incomplete', 'Please select at least CPU, Motherboard, and RAM.');
                 return;
             }
-            
+
             if (buildCompleted) {
                 showModal('Already Added', 'Build parts are already in cart. Make changes to add again.');
                 return;
             }
-            
+
             try {
                 // Get current user/session
                 const user = getUser();
-                
+
                 // Ensure we have a cart
                 await dataService.ensureInitialized();
                 let cartId = dataService.currentCartId;
-                
+
                 if (!cartId) {
                     cartId = await dataService.createNewCart();
                 }
-                
+
                 if (!cartId) {
                     showModal('Error', 'Failed to create cart. Please try again.');
                     return;
                 }
-                
+
                 let addedCount = 0;
                 let totalPrice = 0;
                 const addedParts = [];
-                
+
                 // Add each selected part to cart_items
                 for (const category in selectedParts) {
                     if (selectedParts[category]) {
@@ -1229,7 +1252,7 @@ function setupBuilderListeners() {
                             const price = parseFloat(part.i_price);
                             const itemTotal = price * quantity;
                             totalPrice += itemTotal;
-                            
+
                             // Check if item already exists in cart
                             const { data: existing } = await supabase
                                 .from('cart_items')
@@ -1237,7 +1260,7 @@ function setupBuilderListeners() {
                                 .eq('cart_id', cartId)
                                 .eq('i_id', part.i_id)
                                 .maybeSingle();
-                            
+
                             if (existing) {
                                 // Update existing
                                 await supabase
@@ -1258,38 +1281,38 @@ function setupBuilderListeners() {
                                         total_price: itemTotal
                                     });
                             }
-                            
+
                             addedCount++;
                             addedParts.push(part.i_name);
                         }
                     }
                 }
-                
+
                 if (addedCount > 0) {
                     buildCompleted = true;
-                    document.getElementById('completeBuildBtn').innerHTML = 
+                    document.getElementById('completeBuildBtn').innerHTML =
                         `<i class="fas fa-check"></i> Added (${addedCount} parts, RM ${totalPrice.toFixed(2)})`;
                     document.getElementById('completeBuildBtn').style.background = '#4CAF50';
-                    
+
                     // Update cart count
                     await updateCartCountDisplay();
-                    
+
                     showModal(
-                        'Build Complete! 🎉', 
+                        'Build Complete! 🎉',
                         `Added ${addedCount} parts to your cart.\nTotal: RM ${totalPrice.toFixed(2)}\n\nParts: ${addedParts.join(', ')}`,
                         'Review your cart to checkout.'
                     );
                 } else {
                     showModal('Error', 'No parts were added to the cart.');
                 }
-                
+
             } catch (error) {
                 console.error('Error adding build to cart:', error);
                 showModal('Error', 'Failed to add parts to cart: ' + error.message);
             }
         });
     }
-    
+
     setupModalListeners();
 }
 
@@ -1300,14 +1323,14 @@ function setupHomePageListeners() {
 function setupModalListeners() {
     const modal = document.getElementById('compatibilityModal') || document.getElementById('serviceModal');
     if (!modal) return;
-    
+
     const closeBtn = modal.querySelector('.close-modal');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
             modal.style.display = 'none';
         });
     }
-    
+
     window.addEventListener('click', (e) => {
         if (e.target === modal) {
             modal.style.display = 'none';
@@ -1318,10 +1341,10 @@ function setupModalListeners() {
 function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff9800') {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
-    
+
     const popup = document.createElement('div');
     popup.style.cssText = 'background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:slideUp 0.3s ease;';
-    
+
     popup.innerHTML = `
         <i class="fas fa-${icon}" style="font-size:48px;color:${color};margin-bottom:15px;display:block;"></i>
         <h3 style="color:#1a1a2e;margin-bottom:8px;">${title}</h3>
@@ -1330,14 +1353,14 @@ function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff98
             Got it
         </button>
     `;
-    
+
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
-    
+
     const close = () => overlay.remove();
     document.getElementById('popupCloseBtn').onclick = close;
     overlay.onclick = (e) => { if (e.target === overlay) close(); };
-    
+
     if (!document.getElementById('popupStyles')) {
         const style = document.createElement('style');
         style.id = 'popupStyles';
@@ -1353,7 +1376,7 @@ function showPopup(title, message, icon = 'exclamation-triangle', color = '#ff98
 // AI COMPATIBILITY CHECK
 // ============================================
 
-window.runAICompatibility = async function() {
+window.runAICompatibility = async function () {
     const parts = [];
     for (const cat in selectedParts) {
         if (selectedParts[cat]) {
@@ -1361,7 +1384,7 @@ window.runAICompatibility = async function() {
             if (p) parts.push({ category: cat, name: p.i_name, brand: p.i_brand || '' });
         }
     }
-    
+
     if (parts.length === 0) {
         showPopup(
             'No Components Selected',
@@ -1371,7 +1394,7 @@ window.runAICompatibility = async function() {
         );
         return;
     }
-    
+
     if (parts.length === 1) {
         const selected = parts[0];
         showPopup(
@@ -1382,10 +1405,10 @@ window.runAICompatibility = async function() {
         );
         return;
     }
-    
+
     const hasCPU = parts.find(p => p.category === 'cpu');
     const hasMobo = parts.find(p => p.category === 'motherboard');
-    
+
     if (!hasCPU || !hasMobo) {
         const missing = [];
         if (!hasCPU) missing.push('<strong>CPU</strong>');
@@ -1398,32 +1421,32 @@ window.runAICompatibility = async function() {
         );
         return;
     }
-    
+
     const panel = document.getElementById('aiResultPanel');
     const statusEl = document.getElementById('compatibilityStatus');
     const detailsEl = document.getElementById('aiDetails');
-    
+
     panel.style.display = 'block';
     statusEl.className = 'ai-status checking';
     statusEl.innerHTML = '<i class="fas fa-robot fa-spin"></i> AI analyzing your build...';
     detailsEl.innerHTML = '';
     panel.scrollIntoView({ behavior: 'smooth' });
-    
+
     const btn = document.getElementById('aiCheckBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-    
+
     try {
         const response = await fetch('http://localhost:3000/api/gemini-compat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: buildAIPrompt(parts) })
         });
-        
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         displayAIResults(result);
-        
+
     } catch (error) {
         console.error('AI check failed:', error);
         const result = localCompatCheck(parts);
@@ -1441,7 +1464,7 @@ function buildAIPrompt(parts) {
 function displayAIResults(result) {
     const statusEl = document.getElementById('compatibilityStatus');
     const detailsEl = document.getElementById('aiDetails');
-    
+
     if (result.compatible) {
         statusEl.className = 'ai-status compatible';
         statusEl.innerHTML = `<i class="fas fa-check-circle" style="color:#4CAF50;font-size:20px;"></i> <strong>${result.summary || 'Build Compatible'}</strong> ✅`;
@@ -1449,9 +1472,9 @@ function displayAIResults(result) {
         statusEl.className = 'ai-status incompatible';
         statusEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f44336;font-size:20px;"></i> <strong>${result.summary || 'Issues Found'}</strong> ❌`;
     }
-    
+
     let html = '';
-    
+
     if (result.partDetails?.length) {
         result.partDetails.forEach(p => {
             html += `<div style="margin:6px 0;padding:10px;background:#f8f9fc;border-radius:6px;border-left:3px solid #00d4ff;">
@@ -1459,7 +1482,7 @@ function displayAIResults(result) {
                 <div style="font-size:12px;color:#555;">${p.role || ''}</div></div>`;
         });
     }
-    
+
     if (result.compatibility?.length) {
         result.compatibility.forEach(c => {
             const icon = c.status === 'compatible' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
@@ -1467,15 +1490,15 @@ function displayAIResults(result) {
             html += `<div style="margin:4px 0;padding:6px;background:${bg};border-radius:4px;font-size:12px;">${icon} <strong>${c.parts}:</strong> ${c.detail}</div>`;
         });
     }
-    
+
     if (result.suggestions?.length) {
         html += `<div style="margin-top:8px;padding:8px;background:#e3f2fd;border-radius:6px;font-size:12px;"><strong>💡</strong> ${result.suggestions.join(' | ')}</div>`;
     }
-    
+
     if (result.estimatedWattage) {
         html += `<div style="margin-top:6px;text-align:center;font-size:12px;color:#666;">⚡ ~${result.estimatedWattage}W</div>`;
     }
-    
+
     detailsEl.innerHTML = html || '<p style="color:#666;font-size:13px;">No details available.</p>';
 }
 
@@ -1484,17 +1507,17 @@ function localCompatCheck(parts) {
     const mobo = parts.find(p => p.category === 'motherboard' || p.category === 'MOTHERBOARD');
     const ram = parts.find(p => p.category === 'ram' || p.category === 'RAM');
     const gpu = parts.find(p => p.category === 'gpu' || p.category === 'GPU');
-    
+
     const cpuBrand = (cpu?.brand || '').toLowerCase();
     const moboBrand = (mobo?.brand || '').toLowerCase();
     const compatibility = [];
     const issues = [];
-    
+
     const partDetails = parts.map(p => ({
         name: p.name, category: (p.category || '').toUpperCase(),
         role: getPartRole(p.category), note: ''
     }));
-    
+
     if (cpu && mobo) {
         if (cpuBrand.includes('intel') && moboBrand.includes('amd')) {
             compatibility.push({ parts: `${cpu.name} + ${mobo.name}`, status: 'incompatible', detail: 'Intel CPU needs Intel motherboard' });
@@ -1508,7 +1531,7 @@ function localCompatCheck(parts) {
     }
     if (ram) compatibility.push({ parts: ram.name, status: 'compatible', detail: 'Check RAM type matches board' });
     if (gpu) compatibility.push({ parts: gpu.name, status: 'compatible', detail: 'PCIe x16 compatible' });
-    
+
     return {
         compatible: issues.length === 0,
         confidence: 'medium',

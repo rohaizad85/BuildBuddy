@@ -1,38 +1,130 @@
 // D:\Ijad\Y3S2\FYP\Project\buildbuddy\js\service.js
 
 import supabase from './supabase-client.js';
-import { initCart } from './cart-utils.js';
+import { 
+    getUser, 
+    getCartCount, 
+    updateCartCountDisplay, 
+    initCart,
+    setupLoginButton 
+} from './cart-utils.js';
 
+const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
 let servicesData = [];
 let currentFilter = 'all';
-let isLoading = false;
-
-// ============================================
-// DOM CONTENT LOADED
-// ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // ✅ Setup login button first
+        setupLoginButton();
+        
+        // ✅ Initialize cart
         await initCart();
+        
+        // ✅ Update cart count
+        await updateCartCountDisplay();
+        
+        // ✅ Load services
         await loadServices();
-        setupFilterListeners();
-        setupModalListeners();
+        
+        // ✅ Setup filter buttons
+        setupFilterButtons();
+        
+        // ✅ Setup modal
+        setupModal();
+        
     } catch (error) {
-        console.error('Error initializing services:', error);
+        console.error('Error loading services:', error);
+        showError('Failed to load services. Please refresh the page.');
     }
 });
 
-// ============================================
-// GET SERVICE IMAGE URL
-// ============================================
+async function loadServices() {
+    const grid = document.getElementById('servicesGrid');
+    if (!grid) return;
+
+    grid.innerHTML = `
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading services...</p>
+        </div>
+    `;
+
+    try {
+        const { data, error } = await supabase
+            .from('service')
+            .select('*')
+            .order('service_name');
+
+        if (error) {
+            console.error('Error fetching services:', error);
+            showError('Failed to load services');
+            return;
+        }
+
+        servicesData = data || [];
+        renderServices(currentFilter);
+
+    } catch (error) {
+        console.error('Error loading services:', error);
+        showError('Failed to load services');
+    }
+}
+
+function renderServices(category = 'all') {
+    const grid = document.getElementById('servicesGrid');
+    if (!grid) return;
+
+    const filtered = category === 'all' 
+        ? servicesData 
+        : servicesData.filter(s => s.service_category === category);
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div style="text-align:center;padding:60px;grid-column:1/-1;">
+                <i class="fas fa-tools" style="font-size:48px;color:#ccc;margin-bottom:20px;"></i>
+                <h3>No services found</h3>
+                <p style="color:#666;">Try selecting a different category.</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = filtered.map(service => {
+        const imageUrl = getServiceImageUrl(service);
+        const icon = getServiceIcon(service.service_category);
+        const categoryClass = getCategoryClass(service.service_category);
+        
+        return `
+            <div class="service-card">
+                <div class="service-image">
+                    ${imageUrl ? `
+                        <img src="${imageUrl}" alt="${service.service_name}" 
+                             onerror="this.style.display='none'; this.parentElement.querySelector('.fallback-icon').style.display='flex';">
+                    ` : ''}
+                    <div class="fallback-icon" style="${imageUrl ? 'display:none;' : 'display:flex;'}">
+                        <i class="fas ${icon}"></i>
+                        <span>${service.service_category}</span>
+                    </div>
+                </div>
+                <div class="service-category ${categoryClass}">${service.service_category || 'General'}</div>
+                <h3>${service.service_name}</h3>
+                <div class="service-duration"><i class="fas fa-clock"></i> ${service.service_duration || 'Contact for duration'}</div>
+                <div class="service-price">RM ${parseFloat(service.service_price).toFixed(2)} <small>per service</small></div>
+                <button class="btn-book" onclick="window.bookService(${service.service_id})">
+                    <i class="fas fa-calendar-check"></i> Book Now
+                </button>
+            </div>
+        `;
+    }).join('');
+}
 
 function getServiceImageUrl(service) {
     if (!service) return null;
-    
+
     let imagePath = service.service_image_path;
-    
+
     if (!imagePath) {
-        // Fallback mapping
         const fallbackImages = {
             'Data Recovery': 'Services/Data_Recovery.jpg',
             'OS Installation': 'Services/OS_Install.jpeg',
@@ -42,7 +134,7 @@ function getServiceImageUrl(service) {
             'PC Upgrade': 'Services/PC_Upgrade.jpg',
             'Cable Management': 'Services/Cable_management.jpg'
         };
-        
+
         if (fallbackImages[service.service_name]) {
             imagePath = fallbackImages[service.service_name];
         } else {
@@ -53,7 +145,7 @@ function getServiceImageUrl(service) {
                 }
             }
         }
-        
+
         if (!imagePath) {
             const categoryImages = {
                 'repair': 'Services/repair.jpg',
@@ -65,191 +157,11 @@ function getServiceImageUrl(service) {
             };
             imagePath = categoryImages[service.service_category];
         }
-        
+
         if (!imagePath) return null;
     }
-    
-    const SUPABASE_URL = 'https://kkloxbmybhoawojaovtj.supabase.co';
+
     return `${SUPABASE_URL}/storage/v1/object/public/images/${imagePath}`;
-}
-
-// ============================================
-// LOAD SERVICES
-// ============================================
-
-async function loadServices() {
-    const grid = document.getElementById('servicesGrid');
-    
-    if (isLoading) return;
-    isLoading = true;
-    
-    if (!supabase) {
-        grid.innerHTML = `
-            <div class="loading-container">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
-                <p>Unable to load services. Please refresh the page.</p>
-            </div>
-        `;
-        isLoading = false;
-        return;
-    }
-    
-    try {
-        const result = await supabase
-            .from('service')
-            .select('*')
-            .order('service_category')
-            .order('service_price');
-        
-        let data = null;
-        let error = null;
-        
-        if (Array.isArray(result)) {
-            data = result;
-        } else if (result && typeof result === 'object') {
-            if (result.data !== undefined) {
-                data = result.data;
-                error = result.error || null;
-            } else if (result.length !== undefined) {
-                data = Array.from(result);
-            } else {
-                data = result;
-            }
-        }
-        
-        if (error) {
-            throw new Error(error.message || 'Failed to fetch services');
-        }
-        
-        if (!data) {
-            throw new Error('No data received');
-        }
-        
-        if (!Array.isArray(data)) {
-            data = data.data || data;
-        }
-        
-        if (!data || data.length === 0) {
-            grid.innerHTML = `
-                <div class="loading-container">
-                    <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
-                    <p>No services available at the moment.</p>
-                </div>
-            `;
-            isLoading = false;
-            return;
-        }
-        
-        servicesData = data;
-        renderServices();
-        
-    } catch (error) {
-        console.error('Error loading services:', error);
-        grid.innerHTML = `
-            <div class="loading-container">
-                <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
-                <p>Failed to load services.</p>
-                <button onclick="location.reload()" style="margin-top: 15px; padding: 8px 20px; background: #00d4ff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    <i class="fas fa-sync"></i> Retry
-                </button>
-            </div>
-        `;
-    } finally {
-        isLoading = false;
-    }
-}
-
-// ============================================
-// RENDER SERVICES
-// ============================================
-
-function renderServices() {
-    const grid = document.getElementById('servicesGrid');
-    
-    if (!servicesData || servicesData.length === 0) {
-        grid.innerHTML = `
-            <div class="loading-container">
-                <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
-                <p>No services available.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    const filteredServices = currentFilter === 'all' 
-        ? servicesData 
-        : servicesData.filter(s => s.service_category === currentFilter);
-    
-    if (filteredServices.length === 0) {
-        grid.innerHTML = `
-            <div class="loading-container">
-                <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
-                <p>No services found in "${currentFilter}" category.</p>
-                <button onclick="document.querySelector('.filter-btn[data-filter=\\'all\\']').click()" 
-                        style="margin-top: 15px; padding: 8px 20px; background: #00d4ff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    Show All Services
-                </button>
-            </div>
-        `;
-        return;
-    }
-    
-    grid.innerHTML = filteredServices.map(service => {
-        const categoryClass = getCategoryClass(service.service_category);
-        const icon = getServiceIcon(service.service_category);
-        const imageUrl = getServiceImageUrl(service);
-        
-        return `
-            <div class="service-card">
-                <div class="service-image">
-                    ${imageUrl ? `
-                        <img src="${imageUrl}" 
-                             alt="${service.service_name}"
-                             loading="lazy"
-                             onerror="this.style.display='none'; this.parentElement.querySelector('.fallback-icon').style.display='flex';"
-                        >
-                        <div class="fallback-icon" style="display: none; flex-direction: column; align-items: center; color: #ccc;">
-                            <i class="fas ${icon}" style="font-size: 48px; color: #00d4ff;"></i>
-                            <span style="font-size: 12px; margin-top: 5px; color: #999;">${service.service_category || 'Service'}</span>
-                        </div>
-                    ` : `
-                        <div class="fallback-icon" style="display: flex; flex-direction: column; align-items: center; color: #ccc;">
-                            <i class="fas ${icon}" style="font-size: 48px; color: #00d4ff;"></i>
-                            <span style="font-size: 12px; margin-top: 5px; color: #999;">${service.service_category || 'Service'}</span>
-                        </div>
-                    `}
-                </div>
-                <span class="service-category ${categoryClass}">${service.service_category || 'General'}</span>
-                <h3>${service.service_name}</h3>
-                <div class="service-duration">
-                    <i class="fas fa-clock"></i> ${service.service_duration || 'Contact for duration'}
-                </div>
-                <div class="service-price">
-                    RM ${parseFloat(service.service_price).toFixed(2)}
-                    <small>one-time</small>
-                </div>
-                <button class="btn-book" onclick="window.bookService(${service.service_id})">
-                    <i class="fas fa-calendar-plus"></i> Book Now
-                </button>
-            </div>
-        `;
-    }).join('');
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function getCategoryClass(category) {
-    const classes = {
-        'repair': 'category-repair',
-        'assembly': 'category-assembly',
-        'upgrade': 'category-upgrade',
-        'software': 'category-software',
-        'recovery': 'category-recovery',
-        'maintenance': 'category-maintenance'
-    };
-    return classes[category] || 'category-repair';
 }
 
 function getServiceIcon(category) {
@@ -264,39 +176,144 @@ function getServiceIcon(category) {
     return icons[category] || 'fa-wrench';
 }
 
-// ============================================
-// SETUP LISTENERS
-// ============================================
+function getCategoryClass(category) {
+    const classes = {
+        'repair': 'category-repair',
+        'assembly': 'category-assembly',
+        'upgrade': 'category-upgrade',
+        'software': 'category-software',
+        'recovery': 'category-recovery',
+        'maintenance': 'category-maintenance'
+    };
+    return classes[category] || 'category-repair';
+}
 
-function setupFilterListeners() {
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentFilter = btn.dataset.filter;
-            renderServices();
+function setupFilterButtons() {
+    const buttons = document.querySelectorAll('.filter-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentFilter = this.dataset.filter;
+            renderServices(currentFilter);
         });
     });
 }
 
-window.bookService = function(serviceId) {
-    window.location.href = `service-booking.html?service_id=${serviceId}`;
-};
-
-function setupModalListeners() {
+function setupModal() {
     const modal = document.getElementById('serviceModal');
-    if (!modal) return;
+    const closeBtn = modal?.querySelector('.close-modal');
     
-    const closeBtn = modal.querySelector('.close-modal');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
             modal.style.display = 'none';
         });
     }
-    
+
     window.addEventListener('click', (e) => {
         if (e.target === modal) {
             modal.style.display = 'none';
         }
     });
 }
+
+window.bookService = function(serviceId) {
+    const service = servicesData.find(s => s.service_id === serviceId);
+    if (!service) {
+        showToast('Service not found.', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('serviceModal');
+    const modalMessage = document.getElementById('modalMessage');
+    
+    if (!modal || !modalMessage) return;
+
+    const imageUrl = getServiceImageUrl(service);
+    const icon = getServiceIcon(service.service_category);
+    const categoryClass = getCategoryClass(service.service_category);
+
+    modalMessage.innerHTML = `
+        <div style="text-align:center;">
+            <div style="width:120px;height:120px;margin:0 auto 15px;border-radius:12px;overflow:hidden;background:#f8f9fc;display:flex;align-items:center;justify-content:center;">
+                ${imageUrl ? `
+                    <img src="${imageUrl}" alt="${service.service_name}" style="width:100%;height:100%;object-fit:cover;">
+                ` : `
+                    <i class="fas ${icon}" style="font-size:48px;color:#00d4ff;"></i>
+                `}
+            </div>
+            <div class="service-category ${categoryClass}" style="display:inline-block;margin-bottom:10px;">${service.service_category}</div>
+            <h3 style="margin:0 0 5px 0;">${service.service_name}</h3>
+            <p style="color:#666;margin-bottom:10px;"><i class="fas fa-clock"></i> ${service.service_duration || 'Contact for duration'}</p>
+            <div style="font-size:28px;font-weight:700;color:#1a1a2e;margin-bottom:20px;">RM ${parseFloat(service.service_price).toFixed(2)}</div>
+            <p style="color:#666;margin-bottom:20px;">${service.service_description || 'Professional service with 90-day warranty.'}</p>
+            <button onclick="window.confirmBooking(${service.service_id})" class="btn-book" style="max-width:300px;margin:0 auto;">
+                <i class="fas fa-calendar-check"></i> Confirm Booking
+            </button>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+};
+
+window.confirmBooking = function(serviceId) {
+    window.location.href = `service-booking.html?service_id=${serviceId}`;
+};
+
+function showToast(message, type = 'info') {
+    // Use the existing toast or create one
+    const existingToast = document.querySelector('.custom-toast');
+    if (existingToast) existingToast.remove();
+
+    const colors = {
+        success: '#4CAF50',
+        error: '#f44336',
+        warning: '#ff9800',
+        info: '#00d4ff'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = 'custom-toast';
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        padding: 14px 24px;
+        border-radius: 12px;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 99999;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+        animation: toastSlideUp 0.4s ease;
+        max-width: 400px;
+        background: ${colors[type] || colors.info};
+    `;
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function showError(message) {
+    const grid = document.getElementById('servicesGrid');
+    if (grid) {
+        grid.innerHTML = `
+            <div style="text-align:center;padding:60px;grid-column:1/-1;">
+                <i class="fas fa-exclamation-circle" style="font-size:48px;color:#f44336;margin-bottom:20px;"></i>
+                <h3>Error Loading Services</h3>
+                <p style="color:#666;">${message}</p>
+                <button onclick="location.reload()" style="margin-top:20px;padding:12px 30px;background:#00d4ff;color:#1a1a2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-sync-alt"></i> Retry
+                </button>
+            </div>
+        `;
+    }
+}
+
+console.log('✅ service.js loaded');
